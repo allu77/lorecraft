@@ -1,15 +1,27 @@
 import fs from 'fs/promises';
 import path from 'path';
 
+/** Constituent parts of an Obsidian wikilink. */
 export type WikilinkParts = {
+  /** The note name, e.g. `"Thieves Guild"` from `[[Thieves Guild#Goals|the Guild]]`. */
   noteName: string;
+  /** The section fragment, e.g. `"Goals"` from `[[Thieves Guild#Goals]]`, or `null`. */
   section: string | null;
+  /** The display alias, e.g. `"the Guild"` from `[[Thieves Guild|the Guild]]`, or `null`. */
   altText: string | null;
 };
 
+/**
+ * Provides all read access to a single Obsidian vault, including wikilink
+ * resolution. All methods are scoped to the `vaultRoot` provided at
+ * construction time.
+ */
 export class VaultReader {
   constructor(private readonly vaultRoot: string) {}
 
+  /**
+   * Returns the absolute paths of all `.md` files under `vaultRoot`, recursively.
+   */
   async listNotes(): Promise<string[]> {
     return this._listMdFiles(this.vaultRoot);
   }
@@ -29,6 +41,14 @@ export class VaultReader {
     return results;
   }
 
+  /**
+   * Finds the first `.md` file whose base name matches `name`
+   * (case-insensitive, path-agnostic).
+   *
+   * @param name - Note name with or without the `.md` extension.
+   * @returns Absolute path of the matching file, or `null` if not found.
+   * @throws On filesystem errors.
+   */
   async findNote(name: string): Promise<string | null> {
     const baseName = name.endsWith('.md') ? name : `${name}.md`;
     const notes = await this.listNotes();
@@ -36,6 +56,16 @@ export class VaultReader {
     return notes.find((n) => path.basename(n).toLowerCase() === lower) ?? null;
   }
 
+  /**
+   * Reads a note's content. When `section` is provided, returns only the text
+   * under that heading and all deeper headings (the section subtree), with the
+   * heading line itself included.
+   *
+   * @param filePath - Absolute path to the note file.
+   * @param section - Optional heading name to extract (case-insensitive).
+   * @returns Full note text, or the section subtree when `section` is given.
+   * @throws If the file cannot be read, or if `section` is specified but not found.
+   */
   async readNote(filePath: string, section?: string): Promise<string> {
     const content = await fs.readFile(filePath, 'utf-8');
     if (!section) return content;
@@ -73,6 +103,13 @@ export class VaultReader {
     return sectionLines.join('\n');
   }
 
+  /**
+   * Parses a raw wikilink string into its constituent parts.
+   * Accepts input with or without `[[ ]]` brackets. Pure string operation — no I/O.
+   *
+   * @param raw - Raw wikilink, e.g. `"[[Thieves Guild#Goals|the Guild]]"` or `"Thieves Guild"`.
+   * @returns Parsed `WikilinkParts` with `noteName`, `section`, and `altText`.
+   */
   parseWikilink(raw: string): WikilinkParts {
     let inner = raw.trim();
     if (inner.startsWith('[[') && inner.endsWith(']]')) {
@@ -96,6 +133,14 @@ export class VaultReader {
     return { noteName: inner, section, altText };
   }
 
+  /**
+   * Resolves a wikilink to the absolute path of the matching note.
+   * Only `noteName` is used for resolution; `section` and `altText` are ignored.
+   *
+   * @param wikilink - Raw wikilink string, e.g. `"[[Thieves Guild#Goals]]"`.
+   * @returns Absolute path of the matching note, or `null` if no match exists.
+   * @throws On filesystem errors.
+   */
   async resolveWikilink(wikilink: string): Promise<string | null> {
     const { noteName } = this.parseWikilink(wikilink);
     return this.findNote(noteName);

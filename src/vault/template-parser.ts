@@ -1,12 +1,26 @@
+/** A single input declared in a template's `== INPUTS ==` block. */
 export type TemplateInput = {
+  /** Input name, e.g. `"faction"`. */
   name: string;
+  /** `true` for `(required)`, `false` for `(optional)`. */
   required: boolean;
+  /** Human-readable description, e.g. `"Wikilink to the faction this NPC belongs to"`. */
   description: string;
 };
 
+/** Result of parsing an Obsidian template file. */
 export type ParsedTemplate = {
+  /**
+   * Prose instructions extracted from the `%% == AGENT PROMPT == ... %%` block,
+   * with the `== INPUTS ==` sub-block removed.
+   */
   agentPrompt: string;
+  /** Inputs parsed from the `== INPUTS ==` sub-block. */
   inputs: TemplateInput[];
+  /**
+   * Template content with the `%% == AGENT PROMPT == ... %%` block removed.
+   * All other `%% ... %%` comments are preserved.
+   */
   bodyMarkdown: string;
 };
 
@@ -15,7 +29,18 @@ const AGENT_PROMPT_CLOSE = '%%';
 const INPUTS_HEADING = '== INPUTS ==';
 const INPUT_LINE_REGEX = /^-\s+(\w+)\s+\((required|optional)\):\s+(.+)$/;
 
+/**
+ * Parses Obsidian template files, extracting the agent prompt block and
+ * declared inputs. Stateless — instantiate once and reuse.
+ */
 export class TemplateParser {
+  /**
+   * Parses a template's content into its agent prompt, input declarations,
+   * and body markdown. Tolerates malformed or absent `AGENT PROMPT` blocks.
+   *
+   * @param content - Raw file content of an Obsidian template.
+   * @returns `ParsedTemplate` with `agentPrompt`, `inputs`, and `bodyMarkdown`.
+   */
   parse(content: string): ParsedTemplate {
     const openIdx = content.indexOf(AGENT_PROMPT_OPEN);
     if (openIdx === -1) {
@@ -23,7 +48,6 @@ export class TemplateParser {
     }
 
     const afterOpen = openIdx + AGENT_PROMPT_OPEN.length;
-    // Find the closing %% that terminates the block (must be on its own line)
     const closeIdx = this._findClosingMarker(content, afterOpen);
 
     let blockContent: string;
@@ -35,16 +59,8 @@ export class TemplateParser {
       bodyMarkdown = content.slice(0, openIdx).trimEnd();
     } else {
       blockContent = content.slice(afterOpen, closeIdx);
-      bodyMarkdown =
-        content.slice(0, openIdx).trimEnd() +
-        '\n' +
-        content.slice(closeIdx + AGENT_PROMPT_CLOSE.length).trimStart();
-      bodyMarkdown = bodyMarkdown.trim();
-      // Preserve original leading content if it existed before the block
       const before = content.slice(0, openIdx);
       const after = content.slice(closeIdx + AGENT_PROMPT_CLOSE.length);
-      bodyMarkdown = (before + after).replace(/\n{3,}/g, '\n\n').trim();
-      // Restore exact content outside the block
       bodyMarkdown = before + after;
     }
 
@@ -54,14 +70,13 @@ export class TemplateParser {
   }
 
   private _findClosingMarker(content: string, fromIndex: number): number {
-    // Look for a line that is exactly `%%` (with optional surrounding whitespace)
     const lines = content.slice(fromIndex).split('\n');
     let offset = fromIndex;
     for (const line of lines) {
       if (line.trim() === AGENT_PROMPT_CLOSE) {
         return offset;
       }
-      offset += line.length + 1; // +1 for the \n
+      offset += line.length + 1;
     }
     return -1;
   }
