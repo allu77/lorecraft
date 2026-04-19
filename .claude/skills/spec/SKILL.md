@@ -20,15 +20,15 @@ time. You must complete each phase and get explicit approval before
 moving to the next. Never generate all three documents in one go.
 
 Read the project context before starting:
-- Architecture decisions: @docs/architecture/decisions.md
-- Vision: @docs/vision/lorecraft-vision.md
-- Product requirements: @docs/vision/lorecraft-prfaq.md
+- Architecture decisions: docs/architecture/decisions.md
+- Vision: docs/vision/lorecraft-vision.md
+- Product requirements: docs/vision/lorecraft-prfaq.md
 - CLAUDE.md (already loaded)
 
 Read the three output templates now so you know what you are producing:
-- Requirements template: @.claude/skills/spec/requirements.md
-- Design template:       @.claude/skills/spec/design.md
-- Tasks template:        @.claude/skills/spec/tasks.md
+- Requirements template: .claude/skills/spec/requirements.md
+- Design template:       .claude/skills/spec/design.md
+- Tasks template:        .claude/skills/spec/tasks.md
 
 ---
 
@@ -56,22 +56,8 @@ before proceeding.
 First, read any existing sprint overview if present:
 `docs/sprints/overview.md`
 
-Then conduct a **structured interview** with the user. Ask questions
-one at a time — do not dump a list. Cover:
-
-1. Who are the users in this sprint (e.g. GM, player, system admin)?
-2. For each user: what do they want to be able to do, and why?
-   (This will become a user story — "As a X, I want Y so that Z".)
-3. What is explicitly out of scope for this sprint?
-4. Are there any hard constraints — must-use libraries, interfaces
-   that must stay stable for later sprints, CLI behaviours that must
-   match a specific UX?
-5. For each story: what are the acceptance criteria?
-   (How will we know it's done — test passes, observable behaviour?)
-6. Are there any open questions or assumptions you want flagged?
-
-After the interview, produce the requirements document using the
-template at @.claude/skills/spec/requirements.md. Express every
+Then, produce the requirements document using the
+template at `.claude/skills/spec/requirements.md`. Express every
 in-scope capability as a user story in the **User stories** section.
 Fill every section. Do not leave placeholder text.
 
@@ -99,7 +85,7 @@ Then explore the codebase for relevant context:
 - Are there module boundaries in CLAUDE.md that constrain the design?
 
 Produce the design document using the template at
-@.claude/skills/spec/design.md. Fill every section. For every
+`.claude/skills/spec/design.md`. Fill every section. For every
 significant design decision, state the alternatives considered and why
 you chose this one. If a decision rises to ADR level, flag it
 explicitly with `> **ADR candidate:**`.

@@ -21,7 +21,7 @@ locally hosted web UI (v0.4).
 - `src/__tests__/` — integration tests and fixture vault
 - `docs/`          — all planning and architecture documents (reference below)
 
-## Key documents (load with @ when relevant to the task)
+## Key documents (read when relevant to the task)
 
 - Architecture decisions  `docs/architecture/decisions.md`
 - Vision                  `docs/vision/lorecraft-vision.md`
