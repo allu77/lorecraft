@@ -18,3 +18,5 @@ paths:
   (if (error instanceof Error))
 - Zod for all external/untrusted input validation: LLM tool call
   inputs, template frontmatter, env vars
+- Always include JSDoc for exported functions. Include intent, params,
+  return values. Skip trivial internal helpers.
