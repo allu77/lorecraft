@@ -5,8 +5,8 @@
 The codebase is fully scaffolded (module boundaries, ADRs, fixture vault, TypeScript config) but has zero implementation. The MVP deliverable is a working CLI tool where a GM can run `/generate npc name:foo faction:bar` and get a lore-consistent note via an interactive refinement loop.
 
 Key constraints from ADRs:
-- Vercel AI SDK + `@ai-sdk/amazon-bedrock` (ADR-001, not yet installed)
-- Vitest for all tests (ADR-005, not yet installed)
+- Vercel AI SDK + `@ai-sdk/amazon-bedrock` (ADR-001)
+- Vitest for all tests (ADR-005)
 - No vault writes without GM approval (ADR-003)
 - Context budget required before any vault traversal
 - Token consumption reported after every generation
@@ -17,18 +17,21 @@ Key constraints from ADRs:
 
 ```
 Sprint 0 (Foundation)
-    ├── Sprint 1 (Vault Layer)     ──┐
-    └── Sprint 2 (LLM Provider)   ──┤
-                                     ▼
-                              Sprint 3 (Context Assembly)
-                                     ▼
-                              Sprint 4 (Generation Loop)
-                                     ▼
-                              Sprint 5 (CLI & Integration)
+         │
+         ▼
+Sprint 1 (Vault Layer)
+         │
+         ▼
+Sprint 2 (Context Assembly)
+         │
+         ▼
+Sprint 3 (Generation Loop)
+         │
+         ▼
+Sprint 4 (CLI & Integration)
 ```
 
-Sprints 1 and 2 are independent and can be developed in parallel.
-All other sprints are strictly sequential.
+All sprints are strictly sequential.
 
 ---
 
@@ -48,7 +51,7 @@ All other sprints are strictly sequential.
 
 ---
 
-## Sprint 1 — Vault Layer *(parallel with Sprint 2)*
+## Sprint 1 — Vault Layer
 
 **Goal:** Read vault files, resolve wikilinks, parse templates with agent instructions.
 
@@ -68,37 +71,21 @@ All other sprints are strictly sequential.
 
 ---
 
-## Sprint 2 — LLM Provider Layer *(parallel with Sprint 1)*
+## Sprint 2 — Context Assembly
 
-**Goal:** Single provider abstraction; swap via `.env`; token reporting on every call.
+**Depends on:** Sprint 1
 
-| File | Responsibility |
-|------|---------------|
-| `src/llm/provider.ts` | Instantiate model from env vars, expose `generateWithTokenReport()` |
-| `src/llm/provider.test.ts` | Unit tests using `MockLanguageModelV1` from Vercel AI SDK |
-
-**Key behaviours:**
-- `LLM_PROVIDER=bedrock|anthropic|ollama` selects adapter
-- Returns `{ text: string, usage: { inputTokens, outputTokens, estimatedCostUsd } }` on every call
-- No provider-specific types leak outside this file (ADR-001)
-
-**Exit criteria:** Tests pass with mocked LLM; `pnpm typecheck` passes.
-
----
-
-## Sprint 3 — Context Assembly
-
-**Depends on:** Sprints 1 + 2
-
-**Goal:** Given vault content and a template, assemble a well-formed, budget-bounded prompt.
+**Goal:** Given vault content and a template, assemble a well-formed, budget-bounded prompt. Includes the thin LLM provider setup (`src/llm/provider.ts`) as a prerequisite task.
 
 | File | Responsibility |
 |------|---------------|
+| `src/llm/provider.ts` | Instantiate Bedrock model from env vars, expose `getModel()` |
 | `src/agent/context-budget.ts` | Token counter, budget enforcer, truncation strategy |
 | `src/agent/prompt-builder.ts` | Assemble system prompt: campaign style + template instructions + gathered context |
 | `src/__tests__/agent-vault.integration.test.ts` | Real fixture vault on disk, LLM mocked; snapshot-tests the assembled prompt |
 
 **Key behaviours:**
+- `getModel()` returns an AI SDK `LanguageModel` configured from env vars; no provider-specific types leak outside this file (ADR-001)
 - `ContextBudget(maxTokens)` tracks running token count; `.fits(text)` and `.add(text)` methods
 - `buildPrompt({ campaignStyle, templateInstructions, contextNotes, userInputs })` → `CoreMessage[]`
 - Integration test uses `toMatchSnapshot()` on assembled prompt (ADR-006 — catches context assembly regressions)
@@ -108,9 +95,9 @@ All other sprints are strictly sequential.
 
 ---
 
-## Sprint 4 — Generation Loop
+## Sprint 3 — Generation Loop
 
-**Depends on:** Sprint 3
+**Depends on:** Sprint 2
 
 **Goal:** Full agentic pipeline — input resolution, recursive vault traversal, generation, iterative refinement.
 
@@ -124,18 +111,18 @@ All other sprints are strictly sequential.
 3. For each missing input: scan vault first → if not found, queue for user prompt
 4. Once inputs resolved: recursively fetch wikilinked context notes (depth-limited by budget)
 5. Assemble prompt via `prompt-builder`, enforce context budget
-6. Stream generation from LLM, collect full response
+6. Stream generation from LLM via AI SDK `streamText`; collect full response
 7. Present to user; accept `change` / `approve` commands
 8. On approve: output final markdown; on change: re-generate with user feedback appended
-9. Report token consumption after each generation
+9. Report token consumption (input + output tokens from `result.usage`) after each generation
 
 **Exit criteria:** Integration test drives the loop end-to-end against fixture vault with mocked LLM; approval gate verified; token report emitted.
 
 ---
 
-## Sprint 5 — CLI & Full Integration
+## Sprint 4 — CLI & Full Integration
 
-**Depends on:** Sprint 4
+**Depends on:** Sprint 3
 
 **Goal:** Working CLI — the GM-facing MVP deliverable.
 
@@ -155,15 +142,14 @@ All other sprints are strictly sequential.
 
 ---
 
-## Parallelism Summary
+## Sprint Summary
 
-| Sprint | Parallel with | Depends on |
-|--------|--------------|------------|
-| Sprint 0 — Foundation | — | — |
-| Sprint 1 — Vault Layer | Sprint 2 | Sprint 0 |
-| Sprint 2 — LLM Provider | Sprint 1 | Sprint 0 |
-| Sprint 3 — Context Assembly | — | Sprints 1 + 2 |
-| Sprint 4 — Generation Loop | — | Sprint 3 |
-| Sprint 5 — CLI & Integration | — | Sprint 4 |
+| Sprint | Title | Depends on |
+|--------|-------|------------|
+| Sprint 0 | Foundation & Tooling | — |
+| Sprint 1 | Vault Layer | Sprint 0 |
+| Sprint 2 | Context Assembly | Sprint 1 |
+| Sprint 3 | Generation Loop | Sprint 2 |
+| Sprint 4 | CLI & Integration | Sprint 3 |
 
-**Critical path:** 0 → (1 ∥ 2) → 3 → 4 → 5 = 5 sprint slots (the parallel window between Sprints 1 and 2 saves one slot of calendar time).
+**Critical path:** 0 → 1 → 2 → 3 → 4 = 5 sprints, strictly sequential.
