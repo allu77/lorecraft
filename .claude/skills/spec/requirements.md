@@ -16,15 +16,24 @@ list of technical deliverables. -->
 
 ---
 
-## Scope
+## User stories
 
-### In scope
+<!-- Each story follows the format:
+  **As a** <role>, **I want** <capability> **so that** <benefit>.
 
-<!-- Bullet list of capabilities included in this sprint. Be specific.
-"GM can run /generate npc and receive a Markdown note" is good.
-"CLI works" is not. -->
+Acceptance criteria for each story are listed as a nested checklist.
+Every criterion must be verifiable — either a test passes or a specific
+observable behaviour is demonstrated.
 
-### Out of scope
+**As a** GM, **I want** ... **so that** ...
+- [ ] Criterion 1
+- [ ] Criterion 2
+
+Add one block per story. -->
+
+---
+
+## Out of scope
 
 <!-- Explicit list of things that are NOT in this sprint, especially
 things that might seem related and could cause scope creep.
@@ -40,18 +49,6 @@ Reference the roadmap phase where they will be addressed. -->
 - Must run on Node.js 20+
 - CLI interface must feel like Claude Code (free-form + slash commands)
 List only constraints that are genuinely fixed. -->
-
----
-
-## Acceptance criteria
-
-<!-- Checklist of conditions that must be true for this sprint to be
-considered complete. Each criterion must be verifiable — either a test
-passes, or a specific observable behaviour is demonstrated.
-
-- [ ] Criterion 1
-- [ ] Criterion 2
--->
 
 ---
 

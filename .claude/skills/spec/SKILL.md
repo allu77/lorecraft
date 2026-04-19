@@ -59,18 +59,21 @@ First, read any existing sprint overview if present:
 Then conduct a **structured interview** with the user. Ask questions
 one at a time — do not dump a list. Cover:
 
-1. What is the user-visible outcome at the end of this sprint?
-   (What can the GM do that they couldn't do before?)
-2. What is explicitly out of scope for this sprint?
-3. Are there any hard constraints — must-use libraries, interfaces
+1. Who are the users in this sprint (e.g. GM, player, system admin)?
+2. For each user: what do they want to be able to do, and why?
+   (This will become a user story — "As a X, I want Y so that Z".)
+3. What is explicitly out of scope for this sprint?
+4. Are there any hard constraints — must-use libraries, interfaces
    that must stay stable for later sprints, CLI behaviours that must
    match a specific UX?
-4. What are the acceptance criteria? (How will we know it's done?)
-5. Are there any open questions or assumptions you want flagged?
+5. For each story: what are the acceptance criteria?
+   (How will we know it's done — test passes, observable behaviour?)
+6. Are there any open questions or assumptions you want flagged?
 
 After the interview, produce the requirements document using the
-template at @.claude/skills/spec/requirements.md. Fill every section.
-Do not leave placeholder text.
+template at @.claude/skills/spec/requirements.md. Express every
+in-scope capability as a user story in the **User stories** section.
+Fill every section. Do not leave placeholder text.
 
 Write the file to `docs/sprints/<sprint-id>/requirements.md`.
 
