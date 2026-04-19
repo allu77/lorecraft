@@ -1,6 +1,6 @@
 # Tasks — mvp-sprint-00: Foundation & Tooling
 
-> **Status:** Not started
+> **Status:** Complete
 > **Sprint:** mvp-sprint-00
 > **Requirements:** [requirements.md](requirements.md)
 > **Design:** [design.md](design.md)
@@ -24,7 +24,7 @@
 
 ### Setup
 
-- [ ] 001 — Add runtime deps, dev deps, and missing scripts to `package.json`
+- [x] 001 — Add runtime deps, dev deps, and missing scripts to `package.json`
   - Runtime deps to add: `ai`, `@ai-sdk/amazon-bedrock`, `zod`
   - Dev deps to add: `vitest`, `@vitest/ui`, `execa`
   - Scripts to add: `test` (`vitest run`), `test:watch` (`vitest`),
@@ -33,7 +33,7 @@
 
 ### Core implementation
 
-- [ ] 002 — Create `vitest.config.ts` with globals, coverage block, and `@/*` alias
+- [x] 002 — Create `vitest.config.ts` with globals, coverage block, and `@/*` alias
   - `globals: true`
   - `coverage.provider: 'v8'` (config block only — do not install
     `@vitest/coverage-v8` yet)
@@ -42,13 +42,13 @@
 
 ### Tests
 
-- [ ] 003 — [test] Create smoke test to confirm Vitest is wired
+- [x] 003 — [test] Create smoke test to confirm Vitest is wired
   - Single assertion: `expect(1).toBe(1)`
   - (`src/__tests__/setup.test.ts`)
 
 ### Integration
 
-- [ ] 004 — Verify full exit criteria
+- [x] 004 — Verify full exit criteria
   - `pnpm install` completes without errors
   - `pnpm typecheck` exits 0
   - `pnpm test` passes (smoke test green)
@@ -57,7 +57,7 @@
 
 ### Documentation and wrap-up
 
-- [ ] 005 — Update `docs/sprints/overview.md` to mark sprint complete
+- [x] 005 — Update `docs/sprints/overview.md` to mark sprint complete
   (`docs/sprints/overview.md`)
 
 ---
