@@ -1,6 +1,6 @@
 import path from 'path';
 import { streamText } from 'ai';
-import type { LanguageModel } from 'ai';
+import type { ModelMessage, LanguageModel } from 'ai';
 import { VaultReader } from '../vault/vault-reader.js';
 import { TemplateParser } from '../vault/template-parser.js';
 import { ContextBudget } from './context-budget.js';
@@ -43,12 +43,35 @@ export type GenerateOptions = {
   budgetTokens?: number;
 };
 
-/** Result returned by `generateContent` after a successful generation. */
+/**
+ * Conversation state carried between turns.
+ * `system` is fixed for the lifetime of a conversation. `messages` grows with each turn.
+ */
+export type ConversationContext = {
+  system: string;
+  messages: ModelMessage[];
+};
+
+/** Result returned by `generateContent` or `continueContent`. */
 export type GenerateResult = {
   /** Full generated markdown text. */
   content: string;
   /** Token counts from the Vercel AI SDK usage report. */
   usage: TokenUsage;
+  /** Conversation context to pass to `continueContent` for refinement turns. */
+  conversation: ConversationContext;
+};
+
+/** Options for a continuation turn in an existing conversation. */
+export type ContinueOptions = {
+  /** Conversation context returned by a prior `generateContent` or `continueContent` call. */
+  conversation: ConversationContext;
+  /** The GM's free-form follow-up message. */
+  userMessage: string;
+  /** Optional streaming callback, same as in `GenerateOptions`. */
+  onChunk?: (chunk: string) => void;
+  /** Language model override — inject mock in tests. */
+  model?: LanguageModel;
 };
 
 const CAMPAIGN_STYLE_NOTE = 'Campaign Style';
@@ -138,12 +161,62 @@ export async function generateContent(options: GenerateOptions): Promise<Generat
   const content = chunks.join('');
   const usage = await streamResult.usage;
 
+  const conversation: ConversationContext = {
+    system,
+    messages: [
+      { role: 'user', content: prompt },
+      { role: 'assistant', content },
+    ],
+  };
+
   return {
     content,
     usage: {
       inputTokens: usage.inputTokens ?? 0,
       outputTokens: usage.outputTokens ?? 0,
       totalTokens: usage.totalTokens ?? 0,
+    },
+    conversation,
+  };
+}
+
+/**
+ * Sends a follow-up message in an existing conversation and streams the response.
+ * Skips vault traversal and prompt assembly — uses the system prompt already
+ * assembled by `generateContent`.
+ *
+ * @param options - Continuation request including prior conversation context.
+ * @returns Updated `GenerateResult` with the new content, usage, and extended conversation.
+ */
+export async function continueContent(options: ContinueOptions): Promise<GenerateResult> {
+  const { conversation, userMessage, onChunk } = options;
+  const model = options.model ?? getModel();
+
+  const newMessages: ModelMessage[] = [
+    ...conversation.messages,
+    { role: 'user', content: userMessage },
+  ];
+
+  const streamResult = streamText({ model, system: conversation.system, messages: newMessages });
+  const chunks: string[] = [];
+  for await (const chunk of streamResult.textStream) {
+    chunks.push(chunk);
+    onChunk?.(chunk);
+  }
+
+  const content = chunks.join('');
+  const usage = await streamResult.usage;
+
+  return {
+    content,
+    usage: {
+      inputTokens: usage.inputTokens ?? 0,
+      outputTokens: usage.outputTokens ?? 0,
+      totalTokens: usage.totalTokens ?? 0,
+    },
+    conversation: {
+      system: conversation.system,
+      messages: [...newMessages, { role: 'assistant', content }],
     },
   };
 }

@@ -2,7 +2,7 @@ import path from 'path';
 import { describe, it, expect } from 'vitest';
 import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
-import { generateContent } from '../agent/generation-loop.js';
+import { generateContent, continueContent } from '../agent/generation-loop.js';
 
 const FIXTURE_VAULT = path.resolve(import.meta.dirname, 'fixtures/test-vault');
 const NPC_TEMPLATE = path.join(FIXTURE_VAULT, '_templates/npc.md');
@@ -48,6 +48,10 @@ describe('generateContent integration', () => {
     expect(result.usage.totalTokens).toBeTypeOf('number');
     expect(chunks.length).toBeGreaterThan(0);
     expect(chunks.join('')).toBe(MOCK_OUTPUT);
+    expect(result.conversation.system).toBeTruthy();
+    expect(result.conversation.messages).toHaveLength(2);
+    expect(result.conversation.messages[0].role).toBe('user');
+    expect(result.conversation.messages[1].role).toBe('assistant');
   });
 
   it('gathers context note when faction input matches a vault note', async () => {
@@ -96,5 +100,26 @@ describe('generateContent integration', () => {
     });
 
     expect(result.content).toBeTruthy();
+  });
+
+  it('continueContent appends user + assistant turns to the conversation', async () => {
+    const CONTINUE_OUTPUT = 'She has a habit of humming off-key.';
+    const first = await generateContent({
+      vaultRoot: FIXTURE_VAULT,
+      templatePath: NPC_TEMPLATE,
+      inputs: { name: 'Mira Shadowcloak', role: 'Spy' },
+      model: makeMockModel(),
+    });
+
+    const second = await continueContent({
+      conversation: first.conversation,
+      userMessage: 'Give this NPC a weird habit.',
+      model: makeMockModel(CONTINUE_OUTPUT),
+    });
+
+    expect(second.content).toBe(CONTINUE_OUTPUT);
+    expect(second.conversation.messages).toHaveLength(4);
+    expect(second.conversation.messages[2].role).toBe('user');
+    expect(second.conversation.messages[3].role).toBe('assistant');
   });
 });
