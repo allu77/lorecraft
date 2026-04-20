@@ -1,0 +1,121 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`agent-vault integration > assembles prompt from fixture vault and matches snapshot 1`] = `
+{
+  "prompt": "Generate the note with the following inputs:
+- name: Mira Shadowcloak
+- faction: Thieves Guild",
+  "system": "You are Lorecraft, an AI co-author for tabletop RPG Game Masters. Your role is to generate lore-consistent campaign content that fits the world the GM has already built. You read the GM's vault notes before writing anything. You never invent facts that contradict the existing lore. You produce output as a Markdown note using the template structure provided.
+
+---
+## Campaign Style
+
+# Campaign Style — The Shattered Coast
+
+%% == LORECRAFT: CAMPAIGN STYLE == %%
+
+## Setting
+A dark, coastal fantasy world. City-states compete for trade routes.
+Magic is rare and distrusted by common folk.
+
+## Tone
+Gritty and grounded. Think Joe Abercrombie, not Tolkien. Moral
+ambiguity is expected. Heroes have flaws; villains have reasons.
+
+## Hard rules
+- No resurrection magic exists in this world
+- Gods are distant and do not intervene directly
+- Never invent a character's age — leave the Age field blank if unknown
+
+## Inspirations
+- The First Law trilogy (Joe Abercrombie)
+- Lies of Locke Lamora (Scott Lynch)
+
+
+---
+## Your Task
+
+Generate a new NPC consistent with the campaign tone and the faction
+or location they belong to. Read the faction note and any linked NPCs
+before generating. The NPC should feel like they belong to the world
+already described — not like a generic fantasy character.
+
+---
+## Output Template
+
+Fill in the following template. Preserve all Markdown headings and fields. Do not add sections that are not in the template.
+
+# {{name}}
+
+
+
+**Role:**
+**Location:**
+**Age:**
+**Status:** Alive
+
+## Description
+
+## Personality
+
+## Secret
+
+## Connections
+
+
+---
+## Relevant Notes from the Vault
+
+### Thieves Guild
+# Thieves Guild
+
+**Type:** Criminal faction
+**Base of operations:** [[Port Calderon]]
+**Leader:** [[Mira Shadowcloak]]
+**Status:** Active
+
+## Goals
+Control the black market trade routes through the Shattered Coast.
+Maintain plausible deniability with the city watch.
+
+## Allies
+- [[Harbor Master Voss]] — paid informant
+- [[The Pale Merchant]] — fence for stolen goods
+
+## Enemies
+- [[Inquisitors of the Coin]] — mercantile enforcement order
+- [[Dock Workers Union]] — competing for harbor control
+
+## Notes
+The Guild does not tolerate killing civilians. It is a business, not
+a war band. Members who draw unnecessary attention are dealt with
+quietly.
+
+
+### Mira Shadowcloak
+# Mira Shadowcloak
+
+**Role:** Guild Master, [[Thieves Guild]]
+**Location:** [[Port Calderon]]
+**Age:**
+**Status:** Alive
+
+## Description
+A lean woman with close-cropped grey hair and the unhurried manner of
+someone who has never needed to raise her voice. She communicates
+displeasure through silence.
+
+## Personality
+Pragmatic to the point of coldness. Loyal to profit, not people.
+Respects competence above all else.
+
+## Secret
+She was once an Inquisitor of the Coin. She knows their methods better
+than they know themselves.
+
+## Connections
+- Leader of [[Thieves Guild]]
+- Old enemy: [[Commander Aldric]] (former colleague)
+",
+}
+`;
