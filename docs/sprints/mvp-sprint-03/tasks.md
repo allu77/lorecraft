@@ -1,6 +1,6 @@
 # Tasks — mvp-sprint-03: Generation Loop
 
-> **Status:** Not started
+> **Status:** Complete
 > **Sprint:** mvp-sprint-03
 > **Requirements:** [requirements.md](requirements.md)
 > **Design:** [design.md](design.md)
@@ -24,19 +24,19 @@
 
 ### Setup
 
-- [ ] 001 — Verify CI passes on the current codebase as the sprint baseline
+- [x] 001 — Verify CI passes on the current codebase as the sprint baseline
   (`docs/sprints/mvp-sprint-03/`)
   - Run `pnpm typecheck && pnpm test`; all checks must be green before coding starts
 
 ### Core implementation
 
-- [ ] 002 — Create `src/llm/provider.ts` — `getModel()` wrapping `@ai-sdk/amazon-bedrock`
+- [x] 002 — Create `src/llm/provider.ts` — `getModel()` wrapping `@ai-sdk/amazon-bedrock`
   (`src/llm/provider.ts`)
   - Read `MODEL_ID` and region from env vars; instantiate the Bedrock model
   - Return a Vercel AI SDK `LanguageModel`; no provider-specific types in the return type
   - Confirm which package exports `MockLanguageModelV1` for use in task 004 (check `ai` or `@ai-sdk/mock`)
 
-- [ ] 003 — Create `src/agent/generation-loop.ts` — exported types and full `generateContent` implementation
+- [x] 003 — Create `src/agent/generation-loop.ts` — exported types and full `generateContent` implementation
   (`src/agent/generation-loop.ts`)
   - Export: `TokenUsage`, `GenerateOptions` (with optional `model` field for test injection), `GenerateResult`
   - Export: `generateContent(options: GenerateOptions): Promise<GenerateResult>`
@@ -51,7 +51,7 @@
 
 ### Tests
 
-- [ ] 004 — [test] Integration test for `generateContent` against fixture vault
+- [x] 004 — [test] Integration test for `generateContent` against fixture vault
   (`src/__tests__/generation-loop.integration.test.ts`)
   - Mock LLM via `MockLanguageModelV1` injected through `options.model`
   - **Happy path:** provide `name` and `role`; assert `content` is a non-empty string; assert `usage` has numeric `promptTokens`, `completionTokens`, `totalTokens`; assert `onChunk` was called at least once
@@ -62,15 +62,15 @@
 
 ### Documentation and wrap-up
 
-- [ ] 005 — Confirm no fixture vault changes are needed; update `src/__tests__/fixtures/test-vault/` if any new note types were introduced
+- [x] 005 — Confirm no fixture vault changes are needed; update `src/__tests__/fixtures/test-vault/` if any new note types were introduced
   (`src/__tests__/fixtures/test-vault/`)
   - Based on design: no new notes required; verify tests pass without changes
 
-- [ ] 006 — Update `docs/architecture/decisions.md` if any ADR candidates were flagged during implementation
+- [x] 006 — Update `docs/architecture/decisions.md` if any ADR candidates were flagged during implementation
   (`docs/architecture/decisions.md`)
   - Design flagged no new ADRs; confirm this holds after implementation
 
-- [ ] 007 — Update `docs/sprints/overview.md` to mark sprint complete
+- [x] 007 — Update `docs/sprints/overview.md` to mark sprint complete
   (`docs/sprints/overview.md`)
 
 ---
