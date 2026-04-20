@@ -1,6 +1,6 @@
 # Tasks — mvp-sprint-04: CLI & Full Integration
 
-> **Status:** Not started
+> **Status:** Complete
 > **Sprint:** mvp-sprint-04
 > **Requirements:** [requirements.md](requirements.md)
 > **Design:** [design.md](design.md)
@@ -24,13 +24,13 @@
 
 ### Setup
 
-- [ ] 001 — Verify CI passes on the current codebase as the sprint baseline
+- [x] 001 — Verify CI passes on the current codebase as the sprint baseline
   (`docs/sprints/mvp-sprint-04/`)
   - Run `pnpm typecheck && pnpm test`; all checks must be green before coding starts
 
 ### Core implementation
 
-- [ ] 002 — Extend `src/agent/generation-loop.ts` with multi-turn support
+- [x] 002 — Extend `src/agent/generation-loop.ts` with multi-turn support
   (`src/agent/generation-loop.ts`)
   - Add `ConversationContext` type: `{ system: string; messages: CoreMessage[] }`
   - Add `conversation: ConversationContext` field to `GenerateResult` (additive — no existing callers break)
@@ -38,7 +38,7 @@
   - Add `ContinueOptions` type (see design interfaces)
   - Add `continueContent(options: ContinueOptions): Promise<GenerateResult>` — skips vault I/O, calls `streamText({ model, system: conversation.system, messages: [..., userMessage] })`, returns updated conversation
 
-- [ ] 003 — [test] Update `generation-loop.integration.test.ts` for the new `conversation` field
+- [x] 003 — [test] Update `generation-loop.integration.test.ts` for the new `conversation` field
   (`src/__tests__/generation-loop.integration.test.ts`)
   - The existing snapshot will be stale — run `pnpm test -u` to regenerate after reviewing the diff
   - Add assertions: happy-path result has `conversation.system` (non-empty string) and `conversation.messages` (2 entries: user + assistant)
@@ -46,7 +46,7 @@
 
 ### Core implementation (continued)
 
-- [ ] 004 — Create `src/cli/index.ts` — command parser, `processCommand`, `main`
+- [x] 004 — Create `src/cli/index.ts` — command parser, `processCommand`, `main`
   (`src/cli/index.ts`)
   - Export `CliDeps` type and `processCommand(line, state, deps?)` function (see design interfaces)
   - Export `main(): Promise<void>` — readline REPL using `node:readline`; reads `VAULT_ROOT` from env
@@ -63,7 +63,7 @@
 
 ### Tests
 
-- [ ] 005 — [test] Unit tests for `parseGenerateCommand`
+- [x] 005 — [test] Unit tests for `parseGenerateCommand`
   (`src/cli/index.test.ts`)
   - Simple type + no inputs: `npc` → `{ type: 'npc', inputs: {} }`
   - Type + simple inputs: `npc name:Mira role:Spy` → `{ type: 'npc', inputs: { name: 'Mira', role: 'Spy' } }`
@@ -71,7 +71,7 @@
   - Mixed quoted/unquoted
   - Extra whitespace is handled gracefully
 
-- [ ] 006 — [test] CLI integration tests for `processCommand`
+- [x] 006 — [test] CLI integration tests for `processCommand`
   (`src/__tests__/cli.integration.test.ts`)
   - Inject `MockLanguageModelV3` and fixture vault via `deps`; capture output via a test WriteStream
   - **`/generate` happy path** — returned state is non-null; output contains streamed mock content; output contains `Tokens:` line
@@ -83,13 +83,13 @@
 
 ### Documentation and wrap-up
 
-- [ ] 007 — Confirm no fixture vault changes needed; verify tests pass without adding notes
+- [x] 007 — Confirm no fixture vault changes needed; verify tests pass without adding notes
   (`src/__tests__/fixtures/test-vault/`)
 
-- [ ] 008 — Update `docs/architecture/decisions.md` — no new ADRs were flagged during design; confirm this after implementation
+- [x] 008 — Update `docs/architecture/decisions.md` — no new ADRs were flagged during design; confirm this after implementation
   (`docs/architecture/decisions.md`)
 
-- [ ] 009 — Update `docs/sprints/overview.md` to mark sprint complete
+- [x] 009 — Update `docs/sprints/overview.md` to mark sprint complete
   (`docs/sprints/overview.md`)
 
 ---
@@ -107,5 +107,5 @@
 ## Discovered during sprint
 
 <!--
-- [ ] NNN — Description (discovered: YYYY-MM-DD)
+- [x] NNN — Description (discovered: YYYY-MM-DD)
 -->

@@ -6,7 +6,7 @@
 | [mvp-sprint-01](mvp-sprint-01/) | Vault Layer | Complete |
 | [mvp-sprint-02](mvp-sprint-02/) | Context Assembly | Complete |
 | [mvp-sprint-03](mvp-sprint-03/) | Generation Loop | Complete |
-| [mvp-sprint-04](mvp-sprint-04/) | CLI & Full Integration | In Progress |
+| [mvp-sprint-04](mvp-sprint-04/) | CLI & Full Integration | Complete |
 
 ---
 
