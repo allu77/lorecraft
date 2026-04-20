@@ -21,7 +21,6 @@ moving to the next. Never generate all three documents in one go.
 
 Read the project context before starting:
 - Architecture decisions: docs/architecture/decisions.md
-- Vision: docs/vision/lorecraft-vision.md
 - Product requirements: docs/vision/lorecraft-prfaq.md
 - CLAUDE.md (already loaded)
 
