@@ -1,6 +1,6 @@
 # Tasks — mvp-sprint-02: Context Assembly
 
-> **Status:** Not started
+> **Status:** Complete
 > **Sprint:** mvp-sprint-02
 > **Requirements:** [requirements.md](requirements.md)
 > **Design:** [design.md](design.md)
@@ -24,28 +24,28 @@
 
 ### Setup
 
-- [ ] 001 — Verify CI is green before starting (`pnpm typecheck && pnpm test`)
+- [x] 001 — Verify CI is green before starting (`pnpm typecheck && pnpm test`)
 
 ### Core implementation
 
-- [ ] 002 — Implement `ContextBudget` class: token tracking, ceiling enforcement, env var default
+- [x] 002 — Implement `ContextBudget` class: token tracking, ceiling enforcement, env var default
   (`src/agent/context-budget.ts`)
-- [ ] 003 — [test] Unit tests for `ContextBudget`
+- [x] 003 — [test] Unit tests for `ContextBudget`
   (`src/agent/context-budget.test.ts`)
   - `remaining` initialises correctly; `fits()` is non-mutating; `add()` reduces remaining; `add()` throws on overflow; env var default; throws when no ceiling available
 
-- [ ] 004 — Implement `buildPrompt`: system prompt constant, section assembly, optional section omission
+- [x] 004 — Implement `buildPrompt`: system prompt constant, section assembly, optional section omission
   (`src/agent/prompt-builder.ts`)
   - Exports `ContextNote`, `BuildPromptArgs`, `BuiltPrompt` types and `buildPrompt` function
   - Sections: base prose → Campaign Style → Your Task (omit if empty) → Output Template → Relevant Notes (omit if empty)
 
-- [ ] 005 — [test] Unit tests for `buildPrompt`
+- [x] 005 — [test] Unit tests for `buildPrompt`
   (`src/agent/prompt-builder.test.ts`)
   - Full args produce correct section order; empty `templateInstructions` omits "Your Task"; empty `contextNotes` omits "Relevant Notes"; `templateBody` always present; multiple notes each get `###` header; `userInputs` appear in `prompt`
 
 ### Integration
 
-- [ ] 006 — Integration test: assemble prompt from real fixture vault and snapshot
+- [x] 006 — Integration test: assemble prompt from real fixture vault and snapshot
   (`src/__tests__/agent-vault.integration.test.ts`)
   - Use `VaultReader` + `TemplateParser` against `src/__tests__/fixtures/test-vault/`
   - Inputs: `Campaign Style.md`, `_templates/npc.md`, `Thieves Guild.md`, `Mira Shadowcloak.md`
@@ -55,7 +55,7 @@
 
 ### Documentation and wrap-up
 
-- [ ] 007 — Update `docs/sprints/overview.md` to mark sprint complete
+- [x] 007 — Update `docs/sprints/overview.md` to mark sprint complete
   (`docs/sprints/overview.md`)
 
 ---
