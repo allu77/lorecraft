@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`generateContent integration > assembled prompt matches snapshot 1`] = `
+exports[`GenerationSession integration > assembled prompt matches snapshot 1`] = `
 {
   "abortSignal": undefined,
   "frequencyPenalty": undefined,
@@ -10,7 +10,14 @@ exports[`generateContent integration > assembled prompt matches snapshot 1`] = `
   "presencePenalty": undefined,
   "prompt": [
     {
-      "content": "You are Lorecraft, an AI co-author for tabletop RPG Game Masters. Your role is to generate lore-consistent campaign content that fits the world the GM has already built. You read the GM's vault notes before writing anything. You never invent facts that contradict the existing lore. You produce output as a Markdown note using the template structure provided.
+      "content": "
+You are Lorecraft, an AI co-author for tabletop RPG Game Masters. 
+Your role is to generate lore-consistent campaign content that fits the 
+world the GM has already built. You read the GM's vault notes before 
+writing anything. You don't need user approval to use tools. Just use them.
+You never invent facts that contradict the existing lore. 
+
+You produce output as a Markdown note using the template structure provided.
 
 ---
 ## Campaign Style
@@ -48,7 +55,7 @@ already described — not like a generic fantasy character.
 ---
 ## Output Template
 
-Fill in the following template. Preserve all Markdown headings and fields. Do not add sections that are not in the template.
+Fill in the following template. Preserve all Markdown headings and fields. Do not add sections that are not in the template. You are expected to fill the template with relevant content, rather than open-ended notes. If you fill like you are missing any piece of info in order to generate the note, ask the user.
 
 # {{name}}
 
@@ -143,8 +150,31 @@ quietly.
   "seed": undefined,
   "stopSequences": undefined,
   "temperature": undefined,
-  "toolChoice": undefined,
-  "tools": undefined,
+  "toolChoice": {
+    "type": "auto",
+  },
+  "tools": [
+    {
+      "description": "Resolves a wikilink and returns the matching vault note content.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false,
+        "properties": {
+          "wikilink": {
+            "description": "Wikilink to resolve, e.g. [[Note Name]] or [[Note Name#Section]].",
+            "type": "string",
+          },
+        },
+        "required": [
+          "wikilink",
+        ],
+        "type": "object",
+      },
+      "name": "wikilink_resolve",
+      "providerOptions": undefined,
+      "type": "function",
+    },
+  ],
   "topK": undefined,
   "topP": undefined,
 }

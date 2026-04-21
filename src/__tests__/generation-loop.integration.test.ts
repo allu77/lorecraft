@@ -2,7 +2,7 @@ import path from 'path';
 import { describe, it, expect } from 'vitest';
 import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
-import { generateContent, continueContent } from '../agent/generation-loop.js';
+import { GenerationSession } from '../agent/generation-loop.js';
 
 const FIXTURE_VAULT = path.resolve(import.meta.dirname, 'fixtures/test-vault');
 const NPC_TEMPLATE = path.join(FIXTURE_VAULT, '_templates/npc.md');
@@ -31,16 +31,16 @@ function makeMockModel(text = MOCK_OUTPUT) {
   });
 }
 
-describe('generateContent integration', () => {
+describe('GenerationSession integration', () => {
   it('happy path: returns content and usage, calls onChunk', async () => {
     const chunks: string[] = [];
-    const result = await generateContent({
+    const session = await GenerationSession.create({
       vaultRoot: FIXTURE_VAULT,
       templatePath: NPC_TEMPLATE,
       inputs: { name: 'Mira Shadowcloak', role: 'Spy' },
-      onChunk: (c) => chunks.push(c),
       model: makeMockModel(),
     });
+    const result = await session.generate((c: string) => chunks.push(c));
 
     expect(result.content).toBe(MOCK_OUTPUT);
     expect(result.usage.inputTokens).toBeTypeOf('number');
@@ -48,20 +48,17 @@ describe('generateContent integration', () => {
     expect(result.usage.totalTokens).toBeTypeOf('number');
     expect(chunks.length).toBeGreaterThan(0);
     expect(chunks.join('')).toBe(MOCK_OUTPUT);
-    expect(result.conversation.system).toBeTruthy();
-    expect(result.conversation.messages).toHaveLength(2);
-    expect(result.conversation.messages[0].role).toBe('user');
-    expect(result.conversation.messages[1].role).toBe('assistant');
   });
 
   it('gathers context note when faction input matches a vault note', async () => {
     const model = makeMockModel();
-    await generateContent({
+    const session = await GenerationSession.create({
       vaultRoot: FIXTURE_VAULT,
       templatePath: NPC_TEMPLATE,
       inputs: { name: 'Mira Shadowcloak', role: 'Spy', faction: 'Thieves Guild' },
       model,
     });
+    await session.generate();
 
     const systemContent = JSON.stringify(model.doStreamCalls[0]);
     expect(systemContent).toContain('Thieves Guild');
@@ -69,19 +66,20 @@ describe('generateContent integration', () => {
 
   it('assembled prompt matches snapshot', async () => {
     const model = makeMockModel();
-    await generateContent({
+    const session = await GenerationSession.create({
       vaultRoot: FIXTURE_VAULT,
       templatePath: NPC_TEMPLATE,
       inputs: { name: 'Mira Shadowcloak', role: 'Spy', faction: 'Thieves Guild' },
       model,
     });
+    await session.generate();
 
     expect(model.doStreamCalls[0]).toMatchSnapshot();
   });
 
   it('throws when a required input is missing', async () => {
     await expect(
-      generateContent({
+      GenerationSession.create({
         vaultRoot: FIXTURE_VAULT,
         templatePath: NPC_TEMPLATE,
         inputs: { role: 'Spy' }, // missing required 'name'
@@ -91,35 +89,30 @@ describe('generateContent integration', () => {
   });
 
   it('succeeds with tiny budget: skips oversized context notes without crashing', async () => {
-    const result = await generateContent({
+    const session = await GenerationSession.create({
       vaultRoot: FIXTURE_VAULT,
       templatePath: NPC_TEMPLATE,
       inputs: { name: 'Mira Shadowcloak', role: 'Spy', faction: 'Thieves Guild' },
       budgetTokens: 10,
       model: makeMockModel(),
     });
+    const result = await session.generate();
 
     expect(result.content).toBeTruthy();
   });
 
-  it('continueContent appends user + assistant turns to the conversation', async () => {
-    const CONTINUE_OUTPUT = 'She has a habit of humming off-key.';
-    const first = await generateContent({
+  it('continue() streams second response from same session', async () => {
+    const session = await GenerationSession.create({
       vaultRoot: FIXTURE_VAULT,
       templatePath: NPC_TEMPLATE,
       inputs: { name: 'Mira Shadowcloak', role: 'Spy' },
       model: makeMockModel(),
     });
+    await session.generate();
 
-    const second = await continueContent({
-      conversation: first.conversation,
-      userMessage: 'Give this NPC a weird habit.',
-      model: makeMockModel(CONTINUE_OUTPUT),
-    });
+    const second = await session.continue('Give this NPC a weird habit.', undefined);
 
-    expect(second.content).toBe(CONTINUE_OUTPUT);
-    expect(second.conversation.messages).toHaveLength(4);
-    expect(second.conversation.messages[2].role).toBe('user');
-    expect(second.conversation.messages[3].role).toBe('assistant');
+    expect(second.content).toBe(MOCK_OUTPUT);
+    expect(second.usage.totalTokens).toBeGreaterThan(0);
   });
 });

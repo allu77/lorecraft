@@ -3,8 +3,7 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import type { LanguageModel } from 'ai';
-import { generateContent, continueContent } from '../agent/generation-loop.js';
-import type { ConversationContext } from '../agent/generation-loop.js';
+import { GenerationSession } from '../agent/generation-loop.js';
 import { initLogger, setVerbose, getLogger } from '../utils/logger.js';
 
 /** Injected dependencies for testing (replaces env vars and real model). */
@@ -25,7 +24,6 @@ const DELIMITER = '─'.repeat(60);
  */
 export function parseGenerateCommand(line: string): { type: string; inputs: Record<string, string> } {
   const trimmed = line.trim();
-  // Tokenise: split on whitespace but preserve quoted values
   const tokens: string[] = [];
   const re = /(\S+:"[^"]*"|\S+)/g;
   let m: RegExpExecArray | null;
@@ -52,19 +50,19 @@ export function parseGenerateCommand(line: string): { type: string; inputs: Reco
 }
 
 /**
- * Processes a single line of CLI input against the current state.
+ * Processes a single line of CLI input against the current session state.
  * Returns updated state. Pure enough to call directly in tests.
  *
  * @param line  - Raw input line from the GM (e.g. "/generate npc name:Mira").
- * @param state - Current conversation state (null if no active conversation).
+ * @param state - Current session (null if no active session).
  * @param deps  - Injected dependencies; omit in production to use env/defaults.
- * @returns Updated `ConversationContext | null` after processing the command.
+ * @returns Updated `GenerationSession | null` after processing the command.
  */
 export async function processCommand(
   line: string,
-  state: ConversationContext | null,
+  state: GenerationSession | null,
   deps?: CliDeps,
-): Promise<ConversationContext | null> {
+): Promise<GenerationSession | null> {
   const log = getLogger('cli');
   const out = deps?.output ?? (process.stdout as NodeJS.WriteStream);
   const write = (s: string) => out.write(s);
@@ -73,24 +71,18 @@ export async function processCommand(
   log.debug({ line: trimmed }, 'command received');
 
   if (!trimmed.startsWith('/')) {
-    // Free-form continuation
     if (state === null) {
       write('No active conversation. Use /generate <type> [key:value…] to start one.\n');
       return null;
     }
     write(DELIMITER + '\n');
     log.info({}, 'continuation started');
-    const result = await continueContent({
-      conversation: state,
-      userMessage: trimmed,
-      onChunk: (chunk) => write(chunk),
-      model: deps?.model,
-    });
+    const result = await state.continue(trimmed, (chunk) => write(chunk));
     write('\n' + DELIMITER + '\n');
     write(
       `Tokens: ${result.usage.inputTokens} in / ${result.usage.outputTokens} out / ${result.usage.totalTokens} total\n`,
     );
-    return result.conversation;
+    return state;
   }
 
   const spaceIdx = trimmed.indexOf(' ');
@@ -138,14 +130,14 @@ export async function processCommand(
 
     log.info({ type, inputKeys: Object.keys(inputs) }, 'generation started');
     try {
-      write(DELIMITER + '\n');
-      const result = await generateContent({
+      const session = await GenerationSession.create({
         vaultRoot,
         templatePath,
         inputs,
-        onChunk: (chunk) => write(chunk),
         model: deps?.model,
       });
+      write(DELIMITER + '\n');
+      const result = await session.generate((chunk) => write(chunk));
       write('\n' + DELIMITER + '\n');
       write(
         `Tokens: ${result.usage.inputTokens} in / ${result.usage.outputTokens} out / ${result.usage.totalTokens} total\n`,
@@ -154,7 +146,7 @@ export async function processCommand(
         { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens },
         'generation finished',
       );
-      return result.conversation;
+      return session;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       log.error({ err: msg, type }, 'generation failed');
@@ -176,7 +168,7 @@ export async function main(): Promise<void> {
   initLogger({ verbose });
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  let state: ConversationContext | null = null;
+  let state: GenerationSession | null = null;
 
   rl.on('line', async (line) => {
     rl.pause();

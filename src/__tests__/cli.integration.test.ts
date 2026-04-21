@@ -5,11 +5,9 @@ import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
 import { processCommand } from '../cli/index.js';
 import type { CliDeps } from '../cli/index.js';
-import type { ConversationContext } from '../agent/generation-loop.js';
 
 const FIXTURE_VAULT = path.resolve(import.meta.dirname, 'fixtures/test-vault');
 const MOCK_OUTPUT = '# Mira Shadowcloak\n\n**Role:** Spy\nA shadowy figure.';
-const MOCK_CONTINUE = 'She hums off-key whenever she is nervous.';
 
 function makeMockModel(text = MOCK_OUTPUT) {
   return new MockLanguageModelV3({
@@ -63,23 +61,23 @@ describe('processCommand', () => {
     expect(captured()).toContain('Tokens:');
   });
 
-  it('continuation turn: state has 4 messages, streams second response', async () => {
+  it('continuation turn: session non-null, streams second response', async () => {
     const firstState = await processCommand('/generate npc name:Mira role:Spy', null, deps);
 
     const continueOut = makeOutput();
     const continueDeps: CliDeps = {
-      model: makeMockModel(MOCK_CONTINUE),
+      // Session model is fixed at creation time; model in continueDeps is ignored
       vaultRoot: FIXTURE_VAULT,
       output: continueOut.stream,
     };
     const secondState = await processCommand('Give this NPC a weird habit.', firstState, continueDeps);
 
     expect(secondState).not.toBeNull();
-    expect((secondState as ConversationContext).messages).toHaveLength(4);
-    expect(continueOut.captured()).toContain(MOCK_CONTINUE);
+    expect(secondState).toBe(firstState);
+    expect(continueOut.captured()).toContain('Tokens:');
   });
 
-  it('/generate resets state: second generate yields fresh 2-message conversation', async () => {
+  it('/generate resets state: second generate returns a fresh session', async () => {
     const firstState = await processCommand('/generate npc name:Mira role:Spy', null, deps);
 
     const secondOut = makeOutput();
@@ -91,7 +89,8 @@ describe('processCommand', () => {
     const secondState = await processCommand('/generate npc name:Aldric role:Guard', firstState, secondDeps);
 
     expect(secondState).not.toBeNull();
-    expect((secondState as ConversationContext).messages).toHaveLength(2);
+    expect(secondState).not.toBe(firstState);
+    expect(secondOut.captured()).toContain(MOCK_OUTPUT);
   });
 
   it('free-form with no active conversation: state stays null, output contains hint', async () => {
@@ -102,7 +101,7 @@ describe('processCommand', () => {
   });
 
   it('unknown slash command: state unchanged, output contains error hint', async () => {
-    const prevState: ConversationContext = { system: 'sys', messages: [] };
+    const prevState = await processCommand('/generate npc name:Mira role:Spy', null, deps);
     const state = await processCommand('/unknown', prevState, deps);
 
     expect(state).toBe(prevState);

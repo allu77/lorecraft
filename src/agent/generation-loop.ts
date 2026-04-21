@@ -1,6 +1,6 @@
 import path from 'path';
-import { streamText } from 'ai';
-import type { ModelMessage, LanguageModel } from 'ai';
+import { ToolLoopAgent, stepCountIs } from 'ai';
+import type { ModelMessage, LanguageModel, ToolSet } from 'ai';
 import { VaultReader } from '../vault/vault-reader.js';
 import { TemplateParser } from '../vault/template-parser.js';
 import { ContextBudget } from './context-budget.js';
@@ -8,15 +8,16 @@ import { buildPrompt } from './prompt-builder.js';
 import type { ContextNote } from './prompt-builder.js';
 import { getModel } from '../llm/provider.js';
 import { getLogger } from '../utils/logger.js';
+import { createWikilinkTool } from './tools.js';
 
-/** Token counts as reported by the Vercel AI SDK after a streamText call. */
+/** Token counts as reported by the Vercel AI SDK after a generation call. */
 export type TokenUsage = {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
 };
 
-/** Options for a single content generation request. */
+/** Options for creating a generation session. */
 export type GenerateOptions = {
   /** Absolute path to the vault root directory. */
   vaultRoot: string;
@@ -28,11 +29,6 @@ export type GenerateOptions = {
    */
   inputs: Record<string, string>;
   /**
-   * Optional streaming callback. Called with each text chunk as it arrives
-   * from the LLM. The CLI uses this for incremental display.
-   */
-  onChunk?: (chunk: string) => void;
-  /**
    * Language model to use. Defaults to `getModel()` from `src/llm/provider.ts`.
    * Inject a mock here in tests to avoid real Bedrock calls.
    */
@@ -42,210 +38,215 @@ export type GenerateOptions = {
    * env var, then 8 000 tokens.
    */
   budgetTokens?: number;
+  /**
+   * Maximum number of tool-call steps before the LLM must produce final text.
+   * Each step is one model call (text or tool call). Default: 10.
+   */
+  maxToolSteps?: number;
 };
 
-/**
- * Conversation state carried between turns.
- * `system` is fixed for the lifetime of a conversation. `messages` grows with each turn.
- */
-export type ConversationContext = {
-  system: string;
-  messages: ModelMessage[];
-};
-
-/** Result returned by `generateContent` or `continueContent`. */
+/** Result returned by `GenerationSession.generate()` or `GenerationSession.continue()`. */
 export type GenerateResult = {
   /** Full generated markdown text. */
   content: string;
   /** Token counts from the Vercel AI SDK usage report. */
   usage: TokenUsage;
-  /** Conversation context to pass to `continueContent` for refinement turns. */
-  conversation: ConversationContext;
-};
-
-/** Options for a continuation turn in an existing conversation. */
-export type ContinueOptions = {
-  /** Conversation context returned by a prior `generateContent` or `continueContent` call. */
-  conversation: ConversationContext;
-  /** The GM's free-form follow-up message. */
-  userMessage: string;
-  /** Optional streaming callback, same as in `GenerateOptions`. */
-  onChunk?: (chunk: string) => void;
-  /** Language model override — inject mock in tests. */
-  model?: LanguageModel;
 };
 
 const CAMPAIGN_STYLE_NOTE = 'Campaign Style';
 const DEFAULT_BUDGET_TOKENS = 8_000;
 
 /**
- * Runs the full generation pipeline for a single vault note.
- * Resolves vault context, assembles a budget-bounded prompt, streams the LLM
- * response, and returns the complete text with token usage.
+ * Encapsulates a single GM generation session: vault pipeline, ToolLoopAgent
+ * instance, and accumulated message history. One session per `/generate` command.
  *
- * Throws if any required template input is missing from `options.inputs`.
- *
- * @param options - Generation request parameters.
- * @returns Resolved `GenerateResult` with `content` and `usage`.
+ * @example
+ *   const session = await GenerationSession.create(options);
+ *   const first = await session.generate(onChunk);
+ *   const refined = await session.continue('make her more mysterious', onChunk);
  */
-export async function generateContent(options: GenerateOptions): Promise<GenerateResult> {
-  const log = getLogger('agent');
-  const { vaultRoot, templatePath, inputs, onChunk } = options;
-  const model = options.model ?? getModel();
+type WikilinkTools = { wikilink_resolve: ReturnType<typeof createWikilinkTool> } & ToolSet;
 
-  log.info({ model: process.env['MODEL_ID'] ?? 'default' }, 'model resolved');
+export class GenerationSession {
+  private readonly agent: ToolLoopAgent<never, WikilinkTools>;
+  private readonly initialPrompt: string;
+  private messages: ModelMessage[] = [];
 
-  const reader = new VaultReader(vaultRoot);
-  const parser = new TemplateParser();
-
-  // 1. Read and parse template
-  const templateContent = await reader.readNote(templatePath);
-  const { agentPrompt, inputs: templateInputs, bodyMarkdown } = parser.parse(templateContent);
-  log.debug({ templatePath, inputCount: templateInputs.length }, 'template loaded');
-
-  // 2. Validate required inputs
-  const missing = templateInputs
-    .filter((i) => i.required && !(i.name in inputs))
-    .map((i) => i.name);
-  if (missing.length > 0) {
-    throw new Error(`Missing required inputs: ${missing.join(', ')}`);
+  private constructor(agent: ToolLoopAgent<never, WikilinkTools>, initialPrompt: string) {
+    this.agent = agent;
+    this.initialPrompt = initialPrompt;
   }
 
-  // 3. Find and read Campaign Style note (soft fail if absent)
-  const campaignStylePath = await reader.findNote(CAMPAIGN_STYLE_NOTE);
-  const campaignStyle = campaignStylePath
-    ? await reader.readNote(campaignStylePath)
-    : '';
+  /**
+   * Runs the vault pipeline (template parse, context pre-fetch, prompt assembly)
+   * and creates the ToolLoopAgent. Does not call the LLM.
+   *
+   * @param options - Session configuration including vault root and template path.
+   * @returns A ready-to-use `GenerationSession`.
+   * @throws If any required template input is missing from `options.inputs`.
+   */
+  static async create(options: GenerateOptions): Promise<GenerationSession> {
+    const log = getLogger('agent');
+    const { vaultRoot, templatePath, inputs } = options;
+    const model = options.model ?? getModel();
 
-  // 4. Initialise context budget
-  const ceiling =
-    options.budgetTokens ??
-    (process.env['CONTEXT_BUDGET_TOKENS']
-      ? Number(process.env['CONTEXT_BUDGET_TOKENS'])
-      : DEFAULT_BUDGET_TOKENS);
-  const budget = new ContextBudget(ceiling);
-  const campaignStyleIncluded = !!(campaignStyle && budget.fits(campaignStyle));
-  if (campaignStyleIncluded) {
-    budget.add(campaignStyle);
-  }
-  log.debug({ ceiling, campaignStyleIncluded }, 'context budget initialised');
+    log.info({ model: process.env['MODEL_ID'] ?? 'default' }, 'model resolved');
 
-  // 5. Gather context notes from template wikilinks and input values
-  const contextNotes: ContextNote[] = [];
-  const seen = new Set<string>();
+    const reader = new VaultReader(vaultRoot);
+    const parser = new TemplateParser();
 
-  const candidates = [...extractWikilinks(bodyMarkdown), ...Object.values(inputs)];
+    const templateContent = await reader.readNote(templatePath);
+    const { agentPrompt, inputs: templateInputs, bodyMarkdown } = parser.parse(templateContent);
+    log.debug({ templatePath, inputCount: templateInputs.length }, 'template loaded');
 
-  for (const candidate of candidates) {
-    const notePath =
-      (await reader.resolveWikilink(candidate)) ?? (await reader.findNote(candidate));
-    if (!notePath || seen.has(notePath)) continue;
-    seen.add(notePath);
-
-    const content = await reader.readNote(notePath);
-    const noteName = path.basename(notePath, '.md');
-    if (budget.fits(content)) {
-      budget.add(content);
-      contextNotes.push({ name: noteName, content });
-      log.debug({ note: noteName, used: budget.tokensUsed, remaining: budget.remaining }, 'note included');
-    } else {
-      log.debug({ note: noteName, reason: 'budget exceeded' }, 'note skipped');
+    const missing = templateInputs
+      .filter((i) => i.required && !(i.name in inputs))
+      .map((i) => i.name);
+    if (missing.length > 0) {
+      throw new Error(`Missing required inputs: ${missing.join(', ')}`);
     }
+
+    const campaignStylePath = await reader.findNote(CAMPAIGN_STYLE_NOTE);
+    const campaignStyle = campaignStylePath
+      ? await reader.readNote(campaignStylePath)
+      : '';
+
+    const ceiling =
+      options.budgetTokens ??
+      (process.env['CONTEXT_BUDGET_TOKENS']
+        ? Number(process.env['CONTEXT_BUDGET_TOKENS'])
+        : DEFAULT_BUDGET_TOKENS);
+    const budget = new ContextBudget(ceiling);
+    const campaignStyleIncluded = !!(campaignStyle && budget.fits(campaignStyle));
+    if (campaignStyleIncluded) {
+      budget.add(campaignStyle);
+    }
+    log.debug({ ceiling, campaignStyleIncluded }, 'context budget initialised');
+
+    const contextNotes: ContextNote[] = [];
+    const seen = new Set<string>();
+    const candidates = [...extractWikilinks(bodyMarkdown), ...Object.values(inputs)];
+
+    for (const candidate of candidates) {
+      const notePath =
+        (await reader.resolveWikilink(candidate)) ?? (await reader.findNote(candidate));
+      if (!notePath || seen.has(notePath)) continue;
+      seen.add(notePath);
+
+      const content = await reader.readNote(notePath);
+      const noteName = path.basename(notePath, '.md');
+      if (budget.fits(content)) {
+        budget.add(content);
+        contextNotes.push({ name: noteName, content });
+        log.debug({ note: noteName, used: budget.tokensUsed, remaining: budget.remaining }, 'note included');
+      } else {
+        log.debug({ note: noteName, reason: 'budget exceeded' }, 'note skipped');
+      }
+    }
+
+    const { system, prompt } = buildPrompt({
+      campaignStyle,
+      templateInstructions: agentPrompt,
+      templateBody: bodyMarkdown,
+      contextNotes,
+      userInputs: inputs,
+    });
+    log.info({ contextNoteCount: contextNotes.length }, 'prompt assembled');
+
+    const agent = new ToolLoopAgent({
+      model,
+      instructions: system,
+      tools: { wikilink_resolve: createWikilinkTool(reader, budget) },
+      stopWhen: stepCountIs(options.maxToolSteps ?? 10),
+    });
+
+    return new GenerationSession(agent, prompt);
   }
 
-  // 6. Assemble prompt and stream generation
-  const { system, prompt } = buildPrompt({
-    campaignStyle,
-    templateInstructions: agentPrompt,
-    templateBody: bodyMarkdown,
-    contextNotes,
-    userInputs: inputs,
-  });
-  log.info({ contextNoteCount: contextNotes.length }, 'prompt assembled');
+  /**
+   * Sends the assembled prompt as the first user message and streams the response.
+   * Call once per session after `create()`.
+   *
+   * @param onChunk - Optional callback called with each text chunk as it arrives.
+   * @returns `GenerateResult` with the full content and cumulative token usage.
+   */
+  async generate(onChunk?: (chunk: string) => void): Promise<GenerateResult> {
+    const log = getLogger('agent');
+    log.debug({ prompt: this.initialPrompt }, 'prompt sent');
+    log.info({}, 'stream started');
 
-  log.debug({ system, prompt }, 'prompt sent');
-  log.info({}, 'stream started');
-  const streamResult = streamText({ model, system, prompt });
-  const chunks: string[] = [];
-  for await (const chunk of streamResult.textStream) {
-    chunks.push(chunk);
-    onChunk?.(chunk);
+    const streamResult = await this.agent.stream({ prompt: this.initialPrompt });
+    const chunks: string[] = [];
+    for await (const chunk of streamResult.textStream) {
+      chunks.push(chunk);
+      onChunk?.(chunk);
+    }
+
+    const content = chunks.join('');
+    const usage = await streamResult.totalUsage;
+    const response = await streamResult.response;
+    log.debug({ content }, 'response received');
+    log.info(
+      { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
+      'stream ended',
+    );
+
+    this.messages = [
+      { role: 'user', content: this.initialPrompt },
+      ...response.messages,
+    ];
+
+    return {
+      content,
+      usage: normalizeUsage(usage),
+    };
   }
 
-  const content = chunks.join('');
-  const usage = await streamResult.usage;
-  log.debug({ content }, 'response received');
-  log.info(
-    { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens },
-    'stream ended',
-  );
+  /**
+   * Sends a follow-up user message to the same ToolLoopAgent and streams the
+   * response. Accumulates message history across calls.
+   *
+   * @param userMessage - The GM's free-form follow-up message.
+   * @param onChunk - Optional callback called with each text chunk as it arrives.
+   * @returns `GenerateResult` with the new content and cumulative token usage.
+   */
+  async continue(userMessage: string, onChunk?: (chunk: string) => void): Promise<GenerateResult> {
+    const log = getLogger('agent');
 
-  const conversation: ConversationContext = {
-    system,
-    messages: [
-      { role: 'user', content: prompt },
-      { role: 'assistant', content },
-    ],
-  };
+    this.messages.push({ role: 'user', content: userMessage });
 
-  return {
-    content,
-    usage: {
-      inputTokens: usage.inputTokens ?? 0,
-      outputTokens: usage.outputTokens ?? 0,
-      totalTokens: usage.totalTokens ?? 0,
-    },
-    conversation,
-  };
+    log.debug({ userMessage, messageCount: this.messages.length }, 'continuation prompt sent');
+    log.info({}, 'continuation stream started');
+
+    const streamResult = await this.agent.stream({ messages: this.messages });
+    const chunks: string[] = [];
+    for await (const chunk of streamResult.textStream) {
+      chunks.push(chunk);
+      onChunk?.(chunk);
+    }
+
+    const content = chunks.join('');
+    const usage = await streamResult.totalUsage;
+    const response = await streamResult.response;
+    log.debug({ content }, 'response received');
+    log.info(
+      { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
+      'continuation stream ended',
+    );
+
+    this.messages.push(...response.messages);
+
+    return {
+      content,
+      usage: normalizeUsage(usage),
+    };
+  }
 }
 
-/**
- * Sends a follow-up message in an existing conversation and streams the response.
- * Skips vault traversal and prompt assembly — uses the system prompt already
- * assembled by `generateContent`.
- *
- * @param options - Continuation request including prior conversation context.
- * @returns Updated `GenerateResult` with the new content, usage, and extended conversation.
- */
-export async function continueContent(options: ContinueOptions): Promise<GenerateResult> {
-  const log = getLogger('agent');
-  const { conversation, userMessage, onChunk } = options;
-  const model = options.model ?? getModel();
-
-  const newMessages: ModelMessage[] = [
-    ...conversation.messages,
-    { role: 'user', content: userMessage },
-  ];
-
-  log.debug({ userMessage, messageCount: newMessages.length }, 'continuation prompt sent');
-  log.info({}, 'continuation stream started');
-  const streamResult = streamText({ model, system: conversation.system, messages: newMessages });
-  const chunks: string[] = [];
-  for await (const chunk of streamResult.textStream) {
-    chunks.push(chunk);
-    onChunk?.(chunk);
-  }
-
-  const content = chunks.join('');
-  const usage = await streamResult.usage;
-  log.debug({ content }, 'response received');
-  log.info(
-    { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens },
-    'continuation stream ended',
-  );
-
-  return {
-    content,
-    usage: {
-      inputTokens: usage.inputTokens ?? 0,
-      outputTokens: usage.outputTokens ?? 0,
-      totalTokens: usage.totalTokens ?? 0,
-    },
-    conversation: {
-      system: conversation.system,
-      messages: [...newMessages, { role: 'assistant', content }],
-    },
-  };
+function normalizeUsage(usage: { inputTokens?: number; outputTokens?: number }): TokenUsage {
+  const input = usage.inputTokens ?? 0;
+  const output = usage.outputTokens ?? 0;
+  return { inputTokens: input, outputTokens: output, totalTokens: input + output };
 }
 
 function extractWikilinks(text: string): string[] {
