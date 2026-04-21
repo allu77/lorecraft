@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { LanguageModel } from 'ai';
 import { generateContent, continueContent } from '../agent/generation-loop.js';
 import type { ConversationContext } from '../agent/generation-loop.js';
+import { initLogger, setVerbose, getLogger } from '../utils/logger.js';
 
 /** Injected dependencies for testing (replaces env vars and real model). */
 export type CliDeps = {
@@ -64,10 +65,12 @@ export async function processCommand(
   state: ConversationContext | null,
   deps?: CliDeps,
 ): Promise<ConversationContext | null> {
+  const log = getLogger('cli');
   const out = deps?.output ?? (process.stdout as NodeJS.WriteStream);
   const write = (s: string) => out.write(s);
 
   const trimmed = line.trim();
+  log.debug({ line: trimmed }, 'command received');
 
   if (!trimmed.startsWith('/')) {
     // Free-form continuation
@@ -76,6 +79,7 @@ export async function processCommand(
       return null;
     }
     write(DELIMITER + '\n');
+    log.info({}, 'continuation started');
     const result = await continueContent({
       conversation: state,
       userMessage: trimmed,
@@ -98,6 +102,7 @@ export async function processCommand(
       [
         'Commands:',
         '  /generate <type> [key:value…]  Generate new content',
+        '  /verbose on|off                Toggle verbose logging to stdout',
         '  /help                           Show this help',
         '  /exit                           Quit',
         '  <free text>                     Continue the current conversation',
@@ -108,7 +113,21 @@ export async function processCommand(
   }
 
   if (command === '/exit') {
+    log.info({}, 'session ended');
     write('Goodbye!\n');
+    return state;
+  }
+
+  if (command === '/verbose') {
+    const arg = args.trim();
+    if (arg !== 'on' && arg !== 'off') {
+      write('Usage: /verbose on|off\n');
+      return state;
+    }
+    const enabled = arg === 'on';
+    setVerbose(enabled);
+    write(`Verbose logging ${enabled ? 'enabled' : 'disabled'}.\n`);
+    log.info({ verbose: enabled }, 'verbose toggled');
     return state;
   }
 
@@ -117,6 +136,7 @@ export async function processCommand(
     const vaultRoot = deps?.vaultRoot ?? process.env['VAULT_ROOT'] ?? '';
     const templatePath = path.join(vaultRoot, '_templates', `${type}.md`);
 
+    log.info({ type, inputKeys: Object.keys(inputs) }, 'generation started');
     try {
       write(DELIMITER + '\n');
       const result = await generateContent({
@@ -130,9 +150,14 @@ export async function processCommand(
       write(
         `Tokens: ${result.usage.inputTokens} in / ${result.usage.outputTokens} out / ${result.usage.totalTokens} total\n`,
       );
+      log.info(
+        { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens },
+        'generation finished',
+      );
       return result.conversation;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      log.error({ err: msg, type }, 'generation failed');
       write(`Error: ${msg}\n`);
       return null;
     }
@@ -147,6 +172,9 @@ export async function processCommand(
  * Runs until the GM types /exit or sends EOF.
  */
 export async function main(): Promise<void> {
+  const verbose = process.argv.includes('--verbose');
+  initLogger({ verbose });
+
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   let state: ConversationContext | null = null;
 

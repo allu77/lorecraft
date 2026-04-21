@@ -7,6 +7,7 @@ import { ContextBudget } from './context-budget.js';
 import { buildPrompt } from './prompt-builder.js';
 import type { ContextNote } from './prompt-builder.js';
 import { getModel } from '../llm/provider.js';
+import { getLogger } from '../utils/logger.js';
 
 /** Token counts as reported by the Vercel AI SDK after a streamText call. */
 export type TokenUsage = {
@@ -88,8 +89,11 @@ const DEFAULT_BUDGET_TOKENS = 8_000;
  * @returns Resolved `GenerateResult` with `content` and `usage`.
  */
 export async function generateContent(options: GenerateOptions): Promise<GenerateResult> {
+  const log = getLogger('agent');
   const { vaultRoot, templatePath, inputs, onChunk } = options;
   const model = options.model ?? getModel();
+
+  log.info({ model: process.env['MODEL_ID'] ?? 'default' }, 'model resolved');
 
   const reader = new VaultReader(vaultRoot);
   const parser = new TemplateParser();
@@ -97,6 +101,7 @@ export async function generateContent(options: GenerateOptions): Promise<Generat
   // 1. Read and parse template
   const templateContent = await reader.readNote(templatePath);
   const { agentPrompt, inputs: templateInputs, bodyMarkdown } = parser.parse(templateContent);
+  log.debug({ templatePath, inputCount: templateInputs.length }, 'template loaded');
 
   // 2. Validate required inputs
   const missing = templateInputs
@@ -119,9 +124,11 @@ export async function generateContent(options: GenerateOptions): Promise<Generat
       ? Number(process.env['CONTEXT_BUDGET_TOKENS'])
       : DEFAULT_BUDGET_TOKENS);
   const budget = new ContextBudget(ceiling);
-  if (campaignStyle && budget.fits(campaignStyle)) {
+  const campaignStyleIncluded = !!(campaignStyle && budget.fits(campaignStyle));
+  if (campaignStyleIncluded) {
     budget.add(campaignStyle);
   }
+  log.debug({ ceiling, campaignStyleIncluded }, 'context budget initialised');
 
   // 5. Gather context notes from template wikilinks and input values
   const contextNotes: ContextNote[] = [];
@@ -136,9 +143,13 @@ export async function generateContent(options: GenerateOptions): Promise<Generat
     seen.add(notePath);
 
     const content = await reader.readNote(notePath);
+    const noteName = path.basename(notePath, '.md');
     if (budget.fits(content)) {
       budget.add(content);
-      contextNotes.push({ name: path.basename(notePath, '.md'), content });
+      contextNotes.push({ name: noteName, content });
+      log.debug({ note: noteName, used: budget.tokensUsed, remaining: budget.remaining }, 'note included');
+    } else {
+      log.debug({ note: noteName, reason: 'budget exceeded' }, 'note skipped');
     }
   }
 
@@ -150,7 +161,10 @@ export async function generateContent(options: GenerateOptions): Promise<Generat
     contextNotes,
     userInputs: inputs,
   });
+  log.info({ contextNoteCount: contextNotes.length }, 'prompt assembled');
 
+  log.debug({ system, prompt }, 'prompt sent');
+  log.info({}, 'stream started');
   const streamResult = streamText({ model, system, prompt });
   const chunks: string[] = [];
   for await (const chunk of streamResult.textStream) {
@@ -160,6 +174,11 @@ export async function generateContent(options: GenerateOptions): Promise<Generat
 
   const content = chunks.join('');
   const usage = await streamResult.usage;
+  log.debug({ content }, 'response received');
+  log.info(
+    { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens },
+    'stream ended',
+  );
 
   const conversation: ConversationContext = {
     system,
@@ -189,6 +208,7 @@ export async function generateContent(options: GenerateOptions): Promise<Generat
  * @returns Updated `GenerateResult` with the new content, usage, and extended conversation.
  */
 export async function continueContent(options: ContinueOptions): Promise<GenerateResult> {
+  const log = getLogger('agent');
   const { conversation, userMessage, onChunk } = options;
   const model = options.model ?? getModel();
 
@@ -197,6 +217,8 @@ export async function continueContent(options: ContinueOptions): Promise<Generat
     { role: 'user', content: userMessage },
   ];
 
+  log.debug({ userMessage, messageCount: newMessages.length }, 'continuation prompt sent');
+  log.info({}, 'continuation stream started');
   const streamResult = streamText({ model, system: conversation.system, messages: newMessages });
   const chunks: string[] = [];
   for await (const chunk of streamResult.textStream) {
@@ -206,6 +228,11 @@ export async function continueContent(options: ContinueOptions): Promise<Generat
 
   const content = chunks.join('');
   const usage = await streamResult.usage;
+  log.debug({ content }, 'response received');
+  log.info(
+    { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens },
+    'continuation stream ended',
+  );
 
   return {
     content,

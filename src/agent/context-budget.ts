@@ -1,6 +1,9 @@
+import { getLogger, type Logger } from '../utils/logger.js';
+
 /** Tracks token usage against a ceiling and reports remaining capacity. */
 export class ContextBudget {
   private readonly ceiling: number;
+  private readonly log: Logger;
   private used = 0;
 
   /**
@@ -11,8 +14,11 @@ export class ContextBudget {
    * @param maxTokens - Optional explicit token ceiling.
    */
   constructor(maxTokens?: number) {
+    const log = getLogger('budget');
+    this.log = log;
     if (maxTokens !== undefined) {
       this.ceiling = maxTokens;
+      this.log.debug({ ceiling: this.ceiling }, 'budget created');
       return;
     }
     const envVal = process.env['CONTEXT_BUDGET_TOKENS'];
@@ -28,11 +34,17 @@ export class ContextBudget {
       );
     }
     this.ceiling = parsed;
+    this.log.debug({ ceiling: this.ceiling }, 'budget created');
   }
 
   /** Tokens still available within the ceiling. */
   get remaining(): number {
     return this.ceiling - this.used;
+  }
+
+  /** Tokens consumed so far. */
+  get tokensUsed(): number {
+    return this.used;
   }
 
   /**
@@ -59,6 +71,7 @@ export class ContextBudget {
       );
     }
     this.used += tokens;
+    this.log.debug({ tokens, used: this.used, remaining: this.remaining }, 'tokens consumed');
   }
 
   private _estimate(text: string): number {

@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { getLogger } from '../utils/logger.js';
 
 /** Constituent parts of an Obsidian wikilink. */
 export type WikilinkParts = {
@@ -17,12 +18,15 @@ export type WikilinkParts = {
  * construction time.
  */
 export class VaultReader {
+  private readonly log = getLogger('vault');
+
   constructor(private readonly vaultRoot: string) {}
 
   /**
    * Returns the absolute paths of all `.md` files under `vaultRoot`, recursively.
    */
   async listNotes(): Promise<string[]> {
+    this.log.debug({ vaultRoot: this.vaultRoot }, 'listing notes');
     return this._listMdFiles(this.vaultRoot);
   }
 
@@ -53,7 +57,9 @@ export class VaultReader {
     const baseName = name.endsWith('.md') ? name : `${name}.md`;
     const notes = await this.listNotes();
     const lower = baseName.toLowerCase();
-    return notes.find((n) => path.basename(n).toLowerCase() === lower) ?? null;
+    const result = notes.find((n) => path.basename(n).toLowerCase() === lower) ?? null;
+    this.log.debug({ name, found: result !== null }, 'find note');
+    return result;
   }
 
   /**
@@ -67,6 +73,7 @@ export class VaultReader {
    * @throws If the file cannot be read, or if `section` is specified but not found.
    */
   async readNote(filePath: string, section?: string): Promise<string> {
+    this.log.debug({ filePath, section: section ?? null }, 'reading note');
     const content = await fs.readFile(filePath, 'utf-8');
     if (!section) return content;
     return this._extractSection(content, section, filePath);
@@ -143,6 +150,8 @@ export class VaultReader {
    */
   async resolveWikilink(wikilink: string): Promise<string | null> {
     const { noteName } = this.parseWikilink(wikilink);
-    return this.findNote(noteName);
+    const result = await this.findNote(noteName);
+    this.log.debug({ wikilink, resolved: result !== null }, 'wikilink resolved');
+    return result;
   }
 }
