@@ -28,7 +28,13 @@ export type BuiltPrompt = {
   prompt: string;
 };
 
-const BASE_PROSE = `You are Lorecraft, an AI co-author for tabletop RPG Game Masters. Your role is to generate lore-consistent campaign content that fits the world the GM has already built. You read the GM's vault notes before writing anything. You never invent facts that contradict the existing lore. You produce output as a Markdown note using the template structure provided.`;
+const BASE_PROSE = `
+You are Lorecraft, an AI co-author for tabletop RPG Game Masters. 
+Your role is to generate lore-consistent campaign content that fits the 
+world the GM has already built. You read the GM's vault notes before 
+writing anything. You never invent facts that contradict the existing lore. 
+
+You produce output as a Markdown note using the template structure provided.`;
 
 /**
  * Assembles a prompt from campaign context.
@@ -50,7 +56,7 @@ export function buildPrompt(args: BuildPromptArgs): BuiltPrompt {
   }
 
   sections.push(
-    `---\n## Output Template\n\nFill in the following template. Preserve all Markdown headings and fields. Do not add sections that are not in the template.\n\n${templateBody}`,
+    `---\n## Output Template\n\nFill in the following template. Preserve all Markdown headings and fields. Do not add sections that are not in the template. You are expected to fill the template with relevant content, rather than open-ended notes. If you fill like you are missing any piece of info in order to generate the note, ask the user.\n\n${templateBody}`,
   );
 
   if (contextNotes.length > 0) {
