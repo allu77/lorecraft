@@ -21,7 +21,7 @@ moving to the next. Never generate all three documents in one go.
 
 Read the project context before starting:
 - Architecture decisions: docs/architecture/decisions.md
-- Product requirements: docs/vision/lorecraft-prfaq.md
+- Product detail requirement (read only if sprint scope is unclear): docs/vision/lorecraft-prfaq.md
 - CLAUDE.md (already loaded)
 
 Read the three output templates now so you know what you are producing:
@@ -59,6 +59,10 @@ Then, produce the requirements document using the
 template at `.claude/skills/spec/requirements.md`. Express every
 in-scope capability as a user story in the **User stories** section.
 Fill every section. Do not leave placeholder text.
+
+Do not make asusmptions. If something isn't clear from the sprint
+overiew, first check the prfaq document. If still unclear, make a proposal
+to the user and get his feedback.
 
 Write the file to `docs/sprints/<sprint-id>/requirements.md`.
 

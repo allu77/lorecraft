@@ -8,8 +8,7 @@ paths:
 ## Principles
 
 - docs/ is the single source of truth for all planning and architecture
-- Never duplicate content between docs/ and CLAUDE.md — CLAUDE.md
-  references docs/ via @imports
+- Never duplicate content between docs/ and CLAUDE.md
 - Decisions that affect the architecture belong in
   docs/architecture/decisions.md as ADR entries
 
@@ -23,12 +22,6 @@ Each decision follows this structure:
 - **Context:** Why this decision was needed
 - **Decision:** What was decided
 - **Consequences:** Trade-offs and follow-on work
-
-## Planning documents
-
-- Keep PRFAQ versioned by filename (PRFAQ_v0.5.md, etc.)
-- Do not edit old versions — create a new file for each revision
-- The current version is always the highest-numbered file
 
 ## Testing rules (loaded when editing test files)
 

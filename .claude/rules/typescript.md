@@ -6,7 +6,6 @@ paths:
 
 # TypeScript rules
 
-- Strict mode: "strict": true in tsconfig — never disable
 - No `any` — use `unknown` and narrow, or define a proper type
 - Prefer `type` over `interface` for data shapes; use `interface`
   only for extension contracts
