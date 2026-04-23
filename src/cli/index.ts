@@ -4,8 +4,14 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import type { LanguageModel } from 'ai';
 import { GenerationSession } from '../agent/generation-loop.js';
+import type { StreamCallbacks } from '../agent/generation-loop.js';
 import { VaultIndex } from '../vault/vault-index.js';
-import { initLogger, setVerbose, getLogger } from '../utils/logger.js';
+import {
+  initLogger,
+  setVerbose,
+  isVerbose,
+  getLogger,
+} from '../utils/logger.js';
 
 /** Injected dependencies for testing (replaces env vars and real model). */
 export type CliDeps = {
@@ -17,6 +23,37 @@ export type CliDeps = {
 };
 
 const DELIMITER = '─'.repeat(60);
+
+function writeReasoning(
+  out: NodeJS.WriteStream,
+  event: 'start' | 'delta' | 'end',
+  text?: string,
+): void {
+  if (event === 'start') out.write('\n[thinking]\n');
+  else if (event === 'delta' && text) out.write(text);
+  else if (event === 'end') out.write('\n[/thinking]\n');
+}
+
+function writeToolCall(
+  out: NodeJS.WriteStream,
+  toolName: string,
+  input: unknown,
+): void {
+  out.write(`\n[tool: ${toolName}] ${JSON.stringify(input)}\n`);
+}
+
+function buildCallbacks(out: NodeJS.WriteStream): StreamCallbacks {
+  const verbose = isVerbose();
+  return {
+    onText: (chunk) => out.write(chunk),
+    ...(verbose && {
+      onReasoningStart: () => writeReasoning(out, 'start'),
+      onReasoningDelta: (text) => writeReasoning(out, 'delta', text),
+      onReasoningEnd: () => writeReasoning(out, 'end'),
+      onToolCall: (name, input) => writeToolCall(out, name, input),
+    }),
+  };
+}
 
 /**
  * Parses the argument string after `/generate` into a type + key:value inputs map.
@@ -85,7 +122,7 @@ export async function processCommand(
     }
     write(DELIMITER + '\n');
     log.info({}, 'continuation started');
-    const result = await state.continue(trimmed, (chunk) => write(chunk));
+    const result = await state.continue(trimmed, buildCallbacks(out));
     write('\n' + DELIMITER + '\n');
     write(
       `Tokens: ${result.usage.inputTokens} in / ${result.usage.outputTokens} out / ${result.usage.totalTokens} total\n`,
@@ -206,7 +243,7 @@ export async function processCommand(
         vaultIndex,
       });
       write(DELIMITER + '\n');
-      const result = await session.generate((chunk) => write(chunk));
+      const result = await session.generate(buildCallbacks(out));
       write('\n' + DELIMITER + '\n');
       write(
         `Tokens: ${result.usage.inputTokens} in / ${result.usage.outputTokens} out / ${result.usage.totalTokens} total\n`,
@@ -246,8 +283,14 @@ export async function main(): Promise<void> {
     log.info({ noteCount: vaultIndex.stats.noteCount }, 'keyword index loaded');
   }
 
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: '> ',
+  });
   let state: GenerationSession | null = null;
+
+  rl.prompt();
 
   rl.on('line', async (line) => {
     rl.pause();
@@ -265,6 +308,7 @@ export async function main(): Promise<void> {
         process.stdout.write(`Error: ${msg}\n`);
       }
       rl.resume();
+      rl.prompt();
       return;
     }
 
@@ -274,6 +318,7 @@ export async function main(): Promise<void> {
       return;
     }
     rl.resume();
+    rl.prompt();
   });
 
   await new Promise<void>((resolve) => rl.on('close', resolve));

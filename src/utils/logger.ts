@@ -59,6 +59,7 @@ class GatedWritable extends Writable {
 let _logger: PinoLogger = pino({ level: 'silent' });
 let _gate: GatedWritable | null = null;
 let _exitHandlerRegistered = false;
+let _verbose = false;
 
 /**
  * Initialises the root logger. Call once at process startup (in `main()`) before any
@@ -113,7 +114,14 @@ export function initLogger(opts: InitLoggerOptions = {}): void {
  * @param enabled - `true` to show logs on stdout.
  */
 export function setVerbose(enabled: boolean): void {
-  _gate?.setEnabled(enabled);
+  _verbose = enabled;
+}
+
+/**
+ * Returns `true` when verbose mode is active (set via {@link setVerbose}).
+ */
+export function isVerbose(): boolean {
+  return _verbose;
 }
 
 /**
