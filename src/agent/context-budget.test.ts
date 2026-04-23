@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { ContextBudget } from './context-budget.js';
 
 describe('ContextBudget', () => {

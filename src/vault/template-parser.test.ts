@@ -13,10 +13,6 @@ const NPC_TEMPLATE_PATH = path.join(
   '_templates/npc.md'
 );
 
-function loadFixture(relativePath: string): string {
-  return fs.readFileSync(path.join(FIXTURE_VAULT_ROOT, relativePath), 'utf-8');
-}
-
 describe('TemplateParser', () => {
   const parser = new TemplateParser();
 

@@ -64,7 +64,7 @@ describe('agent-vault integration', () => {
     let callCount = 0;
 
     const model = new MockLanguageModelV3({
-      doStream: async (_options) => {
+      doStream: async () => {
         callCount += 1;
         if (callCount === 1) {
           return {
