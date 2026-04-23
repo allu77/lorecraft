@@ -1,12 +1,31 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Writable } from 'node:stream';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
 import { processCommand } from '../cli/index.js';
 import type { CliDeps } from '../cli/index.js';
 import { VaultIndex } from '../vault/vault-index.js';
+import { VaultEmbeddings } from '../vault/vault-embeddings.js';
+import type { EmbeddingProvider } from '../vault/embedding-provider.js';
+
+function makeMockEmbeddingProvider(modelId = 'mock-v1'): EmbeddingProvider {
+  return {
+    modelId,
+    dimensions: 3,
+    embed: vi.fn(async (text: string): Promise<number[]> => {
+      const seed = text.length;
+      return [seed % 7 / 7, seed % 11 / 11, seed % 13 / 13];
+    }),
+    embedMany: vi.fn(async (texts: string[]): Promise<number[][]> =>
+      texts.map((t) => {
+        const seed = t.length;
+        return [seed % 7 / 7, seed % 11 / 11, seed % 13 / 13];
+      }),
+    ),
+  };
+}
 
 const FIXTURE_VAULT = path.resolve(import.meta.dirname, 'fixtures/test-vault');
 const MOCK_OUTPUT = '# Mira Shadowcloak\n\n**Role:** Spy\nA shadowy figure.';
@@ -182,7 +201,7 @@ describe('/index commands', () => {
       ...baseDeps,
       vaultIndex: null,
     });
-    expect(captured()).toMatch(/Index built: \d+ notes indexed/);
+    expect(captured()).toMatch(/BM25 index built: \d+ notes indexed/);
   });
 
   it('/index status when fresh: prints note count and "fresh"', async () => {
@@ -247,7 +266,7 @@ describe('/index commands', () => {
       output: out.stream,
       vaultIndex: staleIndex,
     });
-    expect(out.captured()).toContain('[warning] Index is stale');
+    expect(out.captured()).toContain('[warning] BM25 index is stale');
   });
 
   it('/generate with no index (null): output contains info message', async () => {
@@ -260,5 +279,78 @@ describe('/index commands', () => {
       vaultIndex: null,
     });
     expect(out.captured()).toContain('[info] No keyword index');
+  });
+
+  it('/generate with embeddingProvider but no vaultEmbeddings: warns about missing embedding index', async () => {
+    const model = makeMockModel();
+    const out = makeOutput();
+    await processCommand('/generate npc name:Mira role:Spy', null, {
+      ...baseDeps,
+      model,
+      output: out.stream,
+      embeddingProvider: makeMockEmbeddingProvider(),
+      vaultEmbeddings: null,
+    });
+    expect(out.captured()).toContain('[info] No embedding index');
+  });
+
+  it('/generate with stale vaultEmbeddings: warns to refresh', async () => {
+    const model = makeMockModel();
+    const provider = makeMockEmbeddingProvider();
+    const embIndex = await VaultEmbeddings.build(FIXTURE_VAULT, provider);
+    const staleEmb = Object.create(embIndex) as VaultEmbeddings;
+    Object.defineProperty(staleEmb, 'isStale', { value: async () => true });
+
+    const out = makeOutput();
+    await processCommand('/generate npc name:Mira role:Spy', null, {
+      ...baseDeps,
+      model,
+      output: out.stream,
+      embeddingProvider: provider,
+      vaultEmbeddings: staleEmb,
+    });
+    expect(out.captured()).toContain('[warning] Embedding index is stale');
+  });
+
+  it('/index rebuild with embeddingProvider: prints embedding index built message', async () => {
+    const provider = makeMockEmbeddingProvider();
+    await processCommand('/index rebuild', null, {
+      ...baseDeps,
+      vaultIndex: null,
+      embeddingProvider: provider,
+    });
+    expect(captured()).toMatch(/BM25 index built: \d+ notes indexed/);
+    expect(captured()).toMatch(/Embedding index built: \d+ notes embedded/);
+  });
+
+  it('/index status with vaultEmbeddings: prints embedding index info', async () => {
+    const provider = makeMockEmbeddingProvider();
+    const index = await VaultIndex.build(FIXTURE_VAULT);
+    const embIndex = await VaultEmbeddings.build(FIXTURE_VAULT, provider);
+
+    await processCommand('/index status', null, {
+      ...baseDeps,
+      vaultIndex: index,
+      vaultEmbeddings: embIndex,
+      embeddingProvider: provider,
+    });
+    expect(captured()).toContain('BM25 index:');
+    expect(captured()).toContain('Embedding index:');
+    expect(captured()).toContain('mock-v1');
+  });
+
+  it('/index refresh with vaultEmbeddings: refreshes both indexes', async () => {
+    const provider = makeMockEmbeddingProvider();
+    const index = await VaultIndex.build(FIXTURE_VAULT);
+    const embIndex = await VaultEmbeddings.build(FIXTURE_VAULT, provider);
+
+    await processCommand('/index refresh', null, {
+      ...baseDeps,
+      vaultIndex: index,
+      vaultEmbeddings: embIndex,
+      embeddingProvider: provider,
+    });
+    expect(captured()).toContain('BM25 index refreshed:');
+    expect(captured()).toContain('Embedding index refreshed:');
   });
 });

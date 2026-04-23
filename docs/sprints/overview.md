@@ -8,6 +8,8 @@
 | [mvp-sprint-03](mvp-sprint-03/) | Generation Loop | Complete |
 | [mvp-sprint-04](mvp-sprint-04/) | CLI & Full Integration | Complete |
 | [mvp-sprint-05](mvp-sprint-05/) | WikiLink Resolution Agentic Tool | Complete |
+| [v01-sprints](v01-sprints/) | BM25 Keyword Search | Complete |
+| [v02-sprints](v02-sprints/) | Semantic Search via Embeddings | In Progress |
 
 ---
 

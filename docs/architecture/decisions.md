@@ -40,17 +40,21 @@
 
 ---
 
-## ADR-004: Local embeddings default for semantic search (v0.2)
+## ADR-004: Amazon Bedrock embeddings for semantic search (v0.2)
 - **Date:** 2026-04-18
-- **Status:** Proposed — decision required before v0.2 begins
-- **Context:** Semantic search requires an embedding model. Cloud APIs offer
-  higher quality; local models (Ollama) keep campaign lore private and
-  cost zero.
-- **Decision:** Default to local embeddings via Ollama (`nomic-embed-text`
-  or similar). Cloud embedding APIs available as opt-in via `.env` config.
-- **Consequences:** Requires Ollama installed locally. Quality may be lower
-  than frontier embedding APIs. Revisit if quality proves insufficient
-  in testing.
+- **Status:** Accepted
+- **Context:** Semantic search requires an embedding model. The project already
+  uses Amazon Bedrock for LLM inference; adding a local Ollama dependency for
+  embeddings would increase setup complexity without clear benefit.
+- **Decision:** Use Amazon Bedrock for embeddings (`amazon.titan-embed-text-v2:0`
+  by default). Enabled via `EMBEDDING_PROVIDER=bedrock` env var; absent means
+  semantic search is disabled. Model override via `EMBEDDING_MODEL_ID`. The
+  abstraction (`EmbeddingProvider` interface in `src/vault/embedding-provider.ts`)
+  makes alternative providers straightforward to add later.
+- **Consequences:** AWS credentials required (already assumed for LLM). Zero
+  new local dependencies. Embedding calls incur Bedrock token costs. Notes are
+  chunked before embedding (via `src/vault/note-chunker.ts`) to improve
+  retrieval quality for long notes.
 
 ---
 
