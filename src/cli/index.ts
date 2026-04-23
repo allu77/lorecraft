@@ -22,7 +22,10 @@ const DELIMITER = '─'.repeat(60);
  * @param line - Argument string, e.g. `npc name:"Mira" role:Spy`
  * @returns `{ type, inputs }` parsed from the line.
  */
-export function parseGenerateCommand(line: string): { type: string; inputs: Record<string, string> } {
+export function parseGenerateCommand(line: string): {
+  type: string;
+  inputs: Record<string, string>;
+} {
   const trimmed = line.trim();
   const tokens: string[] = [];
   const re = /(\S+:"[^"]*"|\S+)/g;
@@ -72,7 +75,9 @@ export async function processCommand(
 
   if (!trimmed.startsWith('/')) {
     if (state === null) {
-      write('No active conversation. Use /generate <type> [key:value…] to start one.\n');
+      write(
+        'No active conversation. Use /generate <type> [key:value…] to start one.\n',
+      );
       return null;
     }
     write(DELIMITER + '\n');
@@ -143,7 +148,10 @@ export async function processCommand(
         `Tokens: ${result.usage.inputTokens} in / ${result.usage.outputTokens} out / ${result.usage.totalTokens} total\n`,
       );
       log.info(
-        { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens },
+        {
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+        },
         'generation finished',
       );
       return session;

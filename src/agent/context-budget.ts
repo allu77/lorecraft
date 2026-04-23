@@ -71,7 +71,10 @@ export class ContextBudget {
       );
     }
     this.used += tokens;
-    this.log.debug({ tokens, used: this.used, remaining: this.remaining }, 'tokens consumed');
+    this.log.debug(
+      { tokens, used: this.used, remaining: this.remaining },
+      'tokens consumed',
+    );
   }
 
   private _estimate(text: string): number {

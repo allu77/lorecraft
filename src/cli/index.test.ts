@@ -14,14 +14,20 @@ describe('parseGenerateCommand', () => {
   });
 
   it('quoted values preserve spaces', () => {
-    expect(parseGenerateCommand('npc name:"Mira Shadowcloak" faction:"Thieves Guild"')).toEqual({
+    expect(
+      parseGenerateCommand(
+        'npc name:"Mira Shadowcloak" faction:"Thieves Guild"',
+      ),
+    ).toEqual({
       type: 'npc',
       inputs: { name: 'Mira Shadowcloak', faction: 'Thieves Guild' },
     });
   });
 
   it('mixed quoted and unquoted values', () => {
-    expect(parseGenerateCommand('npc name:"Mira Shadowcloak" role:Spy')).toEqual({
+    expect(
+      parseGenerateCommand('npc name:"Mira Shadowcloak" role:Spy'),
+    ).toEqual({
       type: 'npc',
       inputs: { name: 'Mira Shadowcloak', role: 'Spy' },
     });

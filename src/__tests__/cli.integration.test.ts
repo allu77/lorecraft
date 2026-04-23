@@ -22,7 +22,12 @@ function makeMockModel(text = MOCK_OUTPUT) {
             finishReason: { unified: 'stop' as const, raw: undefined },
             logprobs: undefined,
             usage: {
-              inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+              inputTokens: {
+                total: 10,
+                noCache: 10,
+                cacheRead: undefined,
+                cacheWrite: undefined,
+              },
               outputTokens: { total: 20, text: 20, reasoning: undefined },
             },
           },
@@ -50,11 +55,19 @@ describe('processCommand', () => {
   beforeEach(() => {
     const out = makeOutput();
     captured = out.captured;
-    deps = { model: makeMockModel(), vaultRoot: FIXTURE_VAULT, output: out.stream };
+    deps = {
+      model: makeMockModel(),
+      vaultRoot: FIXTURE_VAULT,
+      output: out.stream,
+    };
   });
 
   it('/generate happy path: returns non-null state, streams content, prints token report', async () => {
-    const state = await processCommand('/generate npc name:Mira role:Spy', null, deps);
+    const state = await processCommand(
+      '/generate npc name:Mira role:Spy',
+      null,
+      deps,
+    );
 
     expect(state).not.toBeNull();
     expect(captured()).toContain(MOCK_OUTPUT);
@@ -62,7 +75,11 @@ describe('processCommand', () => {
   });
 
   it('continuation turn: session non-null, streams second response', async () => {
-    const firstState = await processCommand('/generate npc name:Mira role:Spy', null, deps);
+    const firstState = await processCommand(
+      '/generate npc name:Mira role:Spy',
+      null,
+      deps,
+    );
 
     const continueOut = makeOutput();
     const continueDeps: CliDeps = {
@@ -70,7 +87,11 @@ describe('processCommand', () => {
       vaultRoot: FIXTURE_VAULT,
       output: continueOut.stream,
     };
-    const secondState = await processCommand('Give this NPC a weird habit.', firstState, continueDeps);
+    const secondState = await processCommand(
+      'Give this NPC a weird habit.',
+      firstState,
+      continueDeps,
+    );
 
     expect(secondState).not.toBeNull();
     expect(secondState).toBe(firstState);
@@ -78,7 +99,11 @@ describe('processCommand', () => {
   });
 
   it('/generate resets state: second generate returns a fresh session', async () => {
-    const firstState = await processCommand('/generate npc name:Mira role:Spy', null, deps);
+    const firstState = await processCommand(
+      '/generate npc name:Mira role:Spy',
+      null,
+      deps,
+    );
 
     const secondOut = makeOutput();
     const secondDeps: CliDeps = {
@@ -86,7 +111,11 @@ describe('processCommand', () => {
       vaultRoot: FIXTURE_VAULT,
       output: secondOut.stream,
     };
-    const secondState = await processCommand('/generate npc name:Aldric role:Guard', firstState, secondDeps);
+    const secondState = await processCommand(
+      '/generate npc name:Aldric role:Guard',
+      firstState,
+      secondDeps,
+    );
 
     expect(secondState).not.toBeNull();
     expect(secondState).not.toBe(firstState);
@@ -94,14 +123,22 @@ describe('processCommand', () => {
   });
 
   it('free-form with no active conversation: state stays null, output contains hint', async () => {
-    const state = await processCommand('Give this NPC a weird habit.', null, deps);
+    const state = await processCommand(
+      'Give this NPC a weird habit.',
+      null,
+      deps,
+    );
 
     expect(state).toBeNull();
     expect(captured()).toContain('No active conversation');
   });
 
   it('unknown slash command: state unchanged, output contains error hint', async () => {
-    const prevState = await processCommand('/generate npc name:Mira role:Spy', null, deps);
+    const prevState = await processCommand(
+      '/generate npc name:Mira role:Spy',
+      null,
+      deps,
+    );
     const state = await processCommand('/unknown', prevState, deps);
 
     expect(state).toBe(prevState);
@@ -109,7 +146,11 @@ describe('processCommand', () => {
   });
 
   it('template not found: output contains error, state stays null', async () => {
-    const state = await processCommand('/generate ghost name:Banshee role:Haunt', null, deps);
+    const state = await processCommand(
+      '/generate ghost name:Banshee role:Haunt',
+      null,
+      deps,
+    );
 
     expect(state).toBeNull();
     expect(captured()).toContain('Error:');

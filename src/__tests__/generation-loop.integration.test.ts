@@ -21,7 +21,12 @@ function makeMockModel(text = MOCK_OUTPUT) {
             finishReason: { unified: 'stop' as const, raw: undefined },
             logprobs: undefined,
             usage: {
-              inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+              inputTokens: {
+                total: 10,
+                noCache: 10,
+                cacheRead: undefined,
+                cacheWrite: undefined,
+              },
               outputTokens: { total: 20, text: 20, reasoning: undefined },
             },
           },
@@ -55,7 +60,11 @@ describe('GenerationSession integration', () => {
     const session = await GenerationSession.create({
       vaultRoot: FIXTURE_VAULT,
       templatePath: NPC_TEMPLATE,
-      inputs: { name: 'Mira Shadowcloak', role: 'Spy', faction: 'Thieves Guild' },
+      inputs: {
+        name: 'Mira Shadowcloak',
+        role: 'Spy',
+        faction: 'Thieves Guild',
+      },
       model,
     });
     await session.generate();
@@ -69,7 +78,11 @@ describe('GenerationSession integration', () => {
     const session = await GenerationSession.create({
       vaultRoot: FIXTURE_VAULT,
       templatePath: NPC_TEMPLATE,
-      inputs: { name: 'Mira Shadowcloak', role: 'Spy', faction: 'Thieves Guild' },
+      inputs: {
+        name: 'Mira Shadowcloak',
+        role: 'Spy',
+        faction: 'Thieves Guild',
+      },
       model,
     });
     await session.generate();
@@ -92,7 +105,11 @@ describe('GenerationSession integration', () => {
     const session = await GenerationSession.create({
       vaultRoot: FIXTURE_VAULT,
       templatePath: NPC_TEMPLATE,
-      inputs: { name: 'Mira Shadowcloak', role: 'Spy', faction: 'Thieves Guild' },
+      inputs: {
+        name: 'Mira Shadowcloak',
+        role: 'Spy',
+        faction: 'Thieves Guild',
+      },
       budgetTokens: 10,
       model: makeMockModel(),
     });
@@ -110,7 +127,10 @@ describe('GenerationSession integration', () => {
     });
     await session.generate();
 
-    const second = await session.continue('Give this NPC a weird habit.', undefined);
+    const second = await session.continue(
+      'Give this NPC a weird habit.',
+      undefined,
+    );
 
     expect(second.content).toBe(MOCK_OUTPUT);
     expect(second.usage.totalTokens).toBeGreaterThan(0);

@@ -46,7 +46,13 @@ You produce output as a Markdown note using the template structure provided.`;
  * @returns A `BuiltPrompt` with `system` and `prompt` fields.
  */
 export function buildPrompt(args: BuildPromptArgs): BuiltPrompt {
-  const { campaignStyle, templateInstructions, templateBody, contextNotes, userInputs } = args;
+  const {
+    campaignStyle,
+    templateInstructions,
+    templateBody,
+    contextNotes,
+    userInputs,
+  } = args;
 
   const sections: string[] = [BASE_PROSE];
 

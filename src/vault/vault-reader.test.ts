@@ -4,7 +4,7 @@ import { VaultReader } from './vault-reader';
 
 const FIXTURE_VAULT_ROOT = path.resolve(
   __dirname,
-  '../__tests__/fixtures/test-vault'
+  '../__tests__/fixtures/test-vault',
 );
 
 describe('VaultReader', () => {
@@ -76,7 +76,7 @@ describe('VaultReader', () => {
     it('extracts a section subtree by heading name', async () => {
       const filePath = path.join(
         FIXTURE_VAULT_ROOT,
-        'Factions/Thieves Guild.md'
+        'Factions/Thieves Guild.md',
       );
       const content = await reader.readNote(filePath, 'Goals');
       expect(content).toContain('## Goals');
@@ -87,15 +87,15 @@ describe('VaultReader', () => {
     it('throws when the requested section is not found', async () => {
       const filePath = path.join(
         FIXTURE_VAULT_ROOT,
-        'Factions/Thieves Guild.md'
+        'Factions/Thieves Guild.md',
       );
-      await expect(reader.readNote(filePath, 'Nonexistent Section')).rejects.toThrow();
+      await expect(
+        reader.readNote(filePath, 'Nonexistent Section'),
+      ).rejects.toThrow();
     });
 
     it('throws on a bad file path', async () => {
-      await expect(
-        reader.readNote('/does/not/exist.md')
-      ).rejects.toThrow();
+      await expect(reader.readNote('/does/not/exist.md')).rejects.toThrow();
     });
   });
 
@@ -128,7 +128,9 @@ describe('VaultReader', () => {
     });
 
     it('parses a wikilink with section and alt text', () => {
-      const result = reader.parseWikilink('[[Thieves Guild#Goals|the Guild goals]]');
+      const result = reader.parseWikilink(
+        '[[Thieves Guild#Goals|the Guild goals]]',
+      );
       expect(result).toEqual({
         noteName: 'Thieves Guild',
         section: 'Goals',

@@ -57,7 +57,8 @@ export class VaultReader {
     const baseName = name.endsWith('.md') ? name : `${name}.md`;
     const notes = await this.listNotes();
     const lower = baseName.toLowerCase();
-    const result = notes.find((n) => path.basename(n).toLowerCase() === lower) ?? null;
+    const result =
+      notes.find((n) => path.basename(n).toLowerCase() === lower) ?? null;
     this.log.debug({ name, found: result !== null }, 'find note');
     return result;
   }
@@ -79,7 +80,11 @@ export class VaultReader {
     return this._extractSection(content, section, filePath);
   }
 
-  private _extractSection(content: string, section: string, filePath: string): string {
+  private _extractSection(
+    content: string,
+    section: string,
+    filePath: string,
+  ): string {
     const lines = content.split('\n');
     const headingRegex = /^(#{1,6})\s+(.+)$/;
     let startIndex = -1;
@@ -95,9 +100,7 @@ export class VaultReader {
     }
 
     if (startIndex === -1) {
-      throw new Error(
-        `Section "${section}" not found in "${filePath}"`
-      );
+      throw new Error(`Section "${section}" not found in "${filePath}"`);
     }
 
     const sectionLines = [lines[startIndex]];
@@ -151,7 +154,10 @@ export class VaultReader {
   async resolveWikilink(wikilink: string): Promise<string | null> {
     const { noteName } = this.parseWikilink(wikilink);
     const result = await this.findNote(noteName);
-    this.log.debug({ wikilink, resolved: result !== null }, 'wikilink resolved');
+    this.log.debug(
+      { wikilink, resolved: result !== null },
+      'wikilink resolved',
+    );
     return result;
   }
 }

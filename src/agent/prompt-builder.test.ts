@@ -42,12 +42,18 @@ describe('buildPrompt', () => {
   });
 
   it('omits "Your Task" section when templateInstructions is whitespace-only', () => {
-    const { system } = buildPrompt({ ...BASE_ARGS, templateInstructions: '   \n  ' });
+    const { system } = buildPrompt({
+      ...BASE_ARGS,
+      templateInstructions: '   \n  ',
+    });
     expect(system).not.toContain('## Your Task');
   });
 
   it('always includes templateBody in system', () => {
-    const noInstructions = buildPrompt({ ...BASE_ARGS, templateInstructions: '' });
+    const noInstructions = buildPrompt({
+      ...BASE_ARGS,
+      templateInstructions: '',
+    });
     const noNotes = buildPrompt({ ...BASE_ARGS, contextNotes: [] });
     expect(noInstructions.system).toContain(BASE_ARGS.templateBody);
     expect(noNotes.system).toContain(BASE_ARGS.templateBody);

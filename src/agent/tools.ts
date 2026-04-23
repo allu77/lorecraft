@@ -35,9 +35,14 @@ export type WikilinkToolResult = WikilinkToolFound | WikilinkToolNotFound;
  */
 export function createWikilinkTool(reader: VaultReader, budget: ContextBudget) {
   return tool({
-    description: 'Resolves a wikilink and returns the matching vault note content.',
+    description:
+      'Resolves a wikilink and returns the matching vault note content.',
     inputSchema: z.object({
-      wikilink: z.string().describe('Wikilink to resolve, e.g. [[Note Name]] or [[Note Name#Section]].'),
+      wikilink: z
+        .string()
+        .describe(
+          'Wikilink to resolve, e.g. [[Note Name]] or [[Note Name#Section]].',
+        ),
     }),
     execute: async ({ wikilink }): Promise<WikilinkToolResult> => {
       const { noteName, section } = reader.parseWikilink(wikilink);

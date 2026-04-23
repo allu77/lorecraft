@@ -65,14 +65,19 @@ const DEFAULT_BUDGET_TOKENS = 8_000;
  *   const first = await session.generate(onChunk);
  *   const refined = await session.continue('make her more mysterious', onChunk);
  */
-type WikilinkTools = { wikilink_resolve: ReturnType<typeof createWikilinkTool> } & ToolSet;
+type WikilinkTools = {
+  wikilink_resolve: ReturnType<typeof createWikilinkTool>;
+} & ToolSet;
 
 export class GenerationSession {
   private readonly agent: ToolLoopAgent<never, WikilinkTools>;
   private readonly initialPrompt: string;
   private messages: ModelMessage[] = [];
 
-  private constructor(agent: ToolLoopAgent<never, WikilinkTools>, initialPrompt: string) {
+  private constructor(
+    agent: ToolLoopAgent<never, WikilinkTools>,
+    initialPrompt: string,
+  ) {
     this.agent = agent;
     this.initialPrompt = initialPrompt;
   }
@@ -96,8 +101,15 @@ export class GenerationSession {
     const parser = new TemplateParser();
 
     const templateContent = await reader.readNote(templatePath);
-    const { agentPrompt, inputs: templateInputs, bodyMarkdown } = parser.parse(templateContent);
-    log.debug({ templatePath, inputCount: templateInputs.length }, 'template loaded');
+    const {
+      agentPrompt,
+      inputs: templateInputs,
+      bodyMarkdown,
+    } = parser.parse(templateContent);
+    log.debug(
+      { templatePath, inputCount: templateInputs.length },
+      'template loaded',
+    );
 
     const missing = templateInputs
       .filter((i) => i.required && !(i.name in inputs))
@@ -117,7 +129,9 @@ export class GenerationSession {
         ? Number(process.env['CONTEXT_BUDGET_TOKENS'])
         : DEFAULT_BUDGET_TOKENS);
     const budget = new ContextBudget(ceiling);
-    const campaignStyleIncluded = !!(campaignStyle && budget.fits(campaignStyle));
+    const campaignStyleIncluded = !!(
+      campaignStyle && budget.fits(campaignStyle)
+    );
     if (campaignStyleIncluded) {
       budget.add(campaignStyle);
     }
@@ -125,11 +139,15 @@ export class GenerationSession {
 
     const contextNotes: ContextNote[] = [];
     const seen = new Set<string>();
-    const candidates = [...extractWikilinks(bodyMarkdown), ...Object.values(inputs)];
+    const candidates = [
+      ...extractWikilinks(bodyMarkdown),
+      ...Object.values(inputs),
+    ];
 
     for (const candidate of candidates) {
       const notePath =
-        (await reader.resolveWikilink(candidate)) ?? (await reader.findNote(candidate));
+        (await reader.resolveWikilink(candidate)) ??
+        (await reader.findNote(candidate));
       if (!notePath || seen.has(notePath)) continue;
       seen.add(notePath);
 
@@ -138,9 +156,19 @@ export class GenerationSession {
       if (budget.fits(content)) {
         budget.add(content);
         contextNotes.push({ name: noteName, content });
-        log.debug({ note: noteName, used: budget.tokensUsed, remaining: budget.remaining }, 'note included');
+        log.debug(
+          {
+            note: noteName,
+            used: budget.tokensUsed,
+            remaining: budget.remaining,
+          },
+          'note included',
+        );
       } else {
-        log.debug({ note: noteName, reason: 'budget exceeded' }, 'note skipped');
+        log.debug(
+          { note: noteName, reason: 'budget exceeded' },
+          'note skipped',
+        );
       }
     }
 
@@ -175,7 +203,9 @@ export class GenerationSession {
     log.debug({ prompt: this.initialPrompt }, 'prompt sent');
     log.info({}, 'stream started');
 
-    const streamResult = await this.agent.stream({ prompt: this.initialPrompt });
+    const streamResult = await this.agent.stream({
+      prompt: this.initialPrompt,
+    });
     const chunks: string[] = [];
     for await (const chunk of streamResult.textStream) {
       chunks.push(chunk);
@@ -210,12 +240,18 @@ export class GenerationSession {
    * @param onChunk - Optional callback called with each text chunk as it arrives.
    * @returns `GenerateResult` with the new content and cumulative token usage.
    */
-  async continue(userMessage: string, onChunk?: (chunk: string) => void): Promise<GenerateResult> {
+  async continue(
+    userMessage: string,
+    onChunk?: (chunk: string) => void,
+  ): Promise<GenerateResult> {
     const log = getLogger('agent');
 
     this.messages.push({ role: 'user', content: userMessage });
 
-    log.debug({ userMessage, messageCount: this.messages.length }, 'continuation prompt sent');
+    log.debug(
+      { userMessage, messageCount: this.messages.length },
+      'continuation prompt sent',
+    );
     log.info({}, 'continuation stream started');
 
     const streamResult = await this.agent.stream({ messages: this.messages });
@@ -243,10 +279,17 @@ export class GenerationSession {
   }
 }
 
-function normalizeUsage(usage: { inputTokens?: number; outputTokens?: number }): TokenUsage {
+function normalizeUsage(usage: {
+  inputTokens?: number;
+  outputTokens?: number;
+}): TokenUsage {
   const input = usage.inputTokens ?? 0;
   const output = usage.outputTokens ?? 0;
-  return { inputTokens: input, outputTokens: output, totalTokens: input + output };
+  return {
+    inputTokens: input,
+    outputTokens: output,
+    totalTokens: input + output,
+  };
 }
 
 function extractWikilinks(text: string): string[] {

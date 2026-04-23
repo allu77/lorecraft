@@ -26,8 +26,8 @@ Every criterion must be verifiable — either a test passes or a specific
 observable behaviour is demonstrated.
 
 **As a** GM, **I want** ... **so that** ...
-- [ ] Criterion 1
-- [ ] Criterion 2
+1. Criterion 1
+2.  Criterion 2
 
 Add one block per story. -->
 

@@ -5,13 +5,10 @@ import { TemplateParser } from './template-parser';
 
 const FIXTURE_VAULT_ROOT = path.resolve(
   __dirname,
-  '../__tests__/fixtures/test-vault'
+  '../__tests__/fixtures/test-vault',
 );
 
-const NPC_TEMPLATE_PATH = path.join(
-  FIXTURE_VAULT_ROOT,
-  '_templates/npc.md'
-);
+const NPC_TEMPLATE_PATH = path.join(FIXTURE_VAULT_ROOT, '_templates/npc.md');
 
 describe('TemplateParser', () => {
   const parser = new TemplateParser();

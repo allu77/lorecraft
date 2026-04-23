@@ -78,10 +78,18 @@ describe('agent-vault integration', () => {
                 },
                 {
                   type: 'finish',
-                  finishReason: { unified: 'tool-calls' as const, raw: undefined },
+                  finishReason: {
+                    unified: 'tool-calls' as const,
+                    raw: undefined,
+                  },
                   logprobs: undefined,
                   usage: {
-                    inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+                    inputTokens: {
+                      total: 10,
+                      noCache: 10,
+                      cacheRead: undefined,
+                      cacheWrite: undefined,
+                    },
                     outputTokens: { total: 5, text: 5, reasoning: undefined },
                   },
                 },
@@ -100,7 +108,12 @@ describe('agent-vault integration', () => {
                 finishReason: { unified: 'stop' as const, raw: undefined },
                 logprobs: undefined,
                 usage: {
-                  inputTokens: { total: 20, noCache: 20, cacheRead: undefined, cacheWrite: undefined },
+                  inputTokens: {
+                    total: 20,
+                    noCache: 20,
+                    cacheRead: undefined,
+                    cacheWrite: undefined,
+                  },
                   outputTokens: { total: 30, text: 30, reasoning: undefined },
                 },
               },

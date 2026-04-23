@@ -5,9 +5,19 @@ import path from 'node:path';
 import { z } from 'zod';
 
 /** Structured-logger interface; a subset of pino.Logger. */
-export type Logger = Pick<PinoLogger, 'debug' | 'info' | 'warn' | 'error' | 'child'>;
+export type Logger = Pick<
+  PinoLogger,
+  'debug' | 'info' | 'warn' | 'error' | 'child'
+>;
 
-const LogLevelSchema = z.enum(['trace', 'debug', 'info', 'warn', 'error', 'silent']);
+const LogLevelSchema = z.enum([
+  'trace',
+  'debug',
+  'info',
+  'warn',
+  'error',
+  'silent',
+]);
 type LogLevel = z.infer<typeof LogLevelSchema>;
 
 /** Options for {@link initLogger}. */
@@ -67,7 +77,9 @@ export function initLogger(opts: InitLoggerOptions = {}): void {
   const parsed = LogLevelSchema.safeParse(envLevel);
   const level: LogLevel = opts.level ?? (parsed.success ? parsed.data : 'info');
   const logFile =
-    opts.logFile ?? process.env['LOG_FILE'] ?? path.join(process.cwd(), 'lorecraft.log');
+    opts.logFile ??
+    process.env['LOG_FILE'] ??
+    path.join(process.cwd(), 'lorecraft.log');
 
   _gate = new GatedWritable(opts.verbose ?? false);
 
