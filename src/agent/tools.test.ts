@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { createWikilinkTool } from './tools.js';
-import type { WikilinkToolResult } from './tools.js';
+import { createWikilinkTool, createKeywordSearchTool } from './tools.js';
+import type { WikilinkToolResult, KeywordSearchToolResult } from './tools.js';
 import type { VaultReader } from '../vault/vault-reader.js';
+import type { VaultIndex, SearchResult } from '../vault/vault-index.js';
 import type { ContextBudget } from './context-budget.js';
 
 const NOTE_CONTENT = '# Thieves Guild\n\nA criminal faction.';
@@ -44,6 +45,98 @@ async function callExecute(
     { messages: [], toolCallId: 'test' },
   ) as Promise<WikilinkToolResult>;
 }
+
+function makeIndex(results: SearchResult[]): VaultIndex {
+  return {
+    search: () => results,
+  } as unknown as VaultIndex;
+}
+
+function makeBudgetSequence(fitsSeq: boolean[]): ContextBudget {
+  let i = 0;
+  return {
+    fits: () => fitsSeq[i] ?? false,
+    add: () => {
+      i++;
+    },
+  } as unknown as ContextBudget;
+}
+
+async function callKeywordExecute(
+  tool: ReturnType<typeof createKeywordSearchTool>,
+  args: { query: string; limit?: number },
+): Promise<KeywordSearchToolResult> {
+  const exec = tool.execute!;
+  return exec(args, {
+    messages: [],
+    toolCallId: 'test',
+  }) as Promise<KeywordSearchToolResult>;
+}
+
+describe('createKeywordSearchTool', () => {
+  const note1: SearchResult = {
+    filePath: '/vault/Note One.md',
+    noteName: 'Note One',
+    content: 'Content of note one.',
+    score: 5,
+  };
+  const note2: SearchResult = {
+    filePath: '/vault/Note Two.md',
+    noteName: 'Note Two',
+    content: 'Content of note two.',
+    score: 3,
+  };
+
+  it('results returned and budget consumed for each included note', async () => {
+    const tool = createKeywordSearchTool(
+      makeIndex([note1, note2]),
+      makeBudget(true),
+    );
+
+    const result = await callKeywordExecute(tool, { query: 'test', limit: 3 });
+
+    expect(result).toEqual({
+      found: true,
+      results: [
+        { noteName: 'Note One', content: note1.content },
+        { noteName: 'Note Two', content: note2.content },
+      ],
+    });
+  });
+
+  it('all results skipped by budget → { found: false, reason: "no_results" }', async () => {
+    const tool = createKeywordSearchTool(
+      makeIndex([note1, note2]),
+      makeBudgetSequence([false, false]),
+    );
+
+    const result = await callKeywordExecute(tool, { query: 'test' });
+
+    expect(result).toEqual({ found: false, reason: 'no_results' });
+  });
+
+  it('first result fits, second does not → only first returned', async () => {
+    const tool = createKeywordSearchTool(
+      makeIndex([note1, note2]),
+      makeBudgetSequence([true, false]),
+    );
+
+    const result = await callKeywordExecute(tool, { query: 'test', limit: 3 });
+
+    expect(result).toEqual({
+      found: true,
+      results: [{ noteName: 'Note One', content: note1.content }],
+    });
+  });
+
+  it('empty search results → { found: false, reason: "no_results" }', async () => {
+    const tool = createKeywordSearchTool(makeIndex([]), makeBudget(true));
+
+    const result = await callKeywordExecute(tool, { query: 'nothing' });
+
+    expect(result).toEqual({ found: false, reason: 'no_results' });
+  });
+});
 
 describe('createWikilinkTool', () => {
   it('note found, no section: returns content', async () => {

@@ -11,9 +11,9 @@ describe('VaultReader', () => {
   const reader = new VaultReader(FIXTURE_VAULT_ROOT);
 
   describe('listNotes()', () => {
-    it('returns exactly 4 .md files', async () => {
+    it('returns exactly 5 .md files', async () => {
       const notes = await reader.listNotes();
-      expect(notes).toHaveLength(4);
+      expect(notes).toHaveLength(5);
     });
 
     it('returns only .md files', async () => {

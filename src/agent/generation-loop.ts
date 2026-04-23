@@ -8,7 +8,8 @@ import { buildPrompt } from './prompt-builder.js';
 import type { ContextNote } from './prompt-builder.js';
 import { getModel } from '../llm/provider.js';
 import { getLogger } from '../utils/logger.js';
-import { createWikilinkTool } from './tools.js';
+import type { VaultIndex } from '../vault/vault-index.js';
+import { createWikilinkTool, createKeywordSearchTool } from './tools.js';
 
 /** Token counts as reported by the Vercel AI SDK after a generation call. */
 export type TokenUsage = {
@@ -43,6 +44,12 @@ export type GenerateOptions = {
    * Each step is one model call (text or tool call). Default: 10.
    */
   maxToolSteps?: number;
+  /**
+   * Loaded `VaultIndex` to enable keyword search during generation. When
+   * provided, the agent can call `keyword_search` to surface notes that are
+   * not reachable via wikilinks. Omit to run without keyword search.
+   */
+  vaultIndex?: VaultIndex;
 };
 
 /** Result returned by `GenerationSession.generate()` or `GenerationSession.continue()`. */
@@ -65,17 +72,18 @@ const DEFAULT_BUDGET_TOKENS = 8_000;
  *   const first = await session.generate(onChunk);
  *   const refined = await session.continue('make her more mysterious', onChunk);
  */
-type WikilinkTools = {
+type SessionTools = {
   wikilink_resolve: ReturnType<typeof createWikilinkTool>;
+  keyword_search?: ReturnType<typeof createKeywordSearchTool>;
 } & ToolSet;
 
 export class GenerationSession {
-  private readonly agent: ToolLoopAgent<never, WikilinkTools>;
+  private readonly agent: ToolLoopAgent<never, SessionTools>;
   private readonly initialPrompt: string;
   private messages: ModelMessage[] = [];
 
   private constructor(
-    agent: ToolLoopAgent<never, WikilinkTools>,
+    agent: ToolLoopAgent<never, SessionTools>,
     initialPrompt: string,
   ) {
     this.agent = agent;
@@ -181,10 +189,19 @@ export class GenerationSession {
     });
     log.info({ contextNoteCount: contextNotes.length }, 'prompt assembled');
 
+    const tools: SessionTools = {
+      wikilink_resolve: createWikilinkTool(reader, budget),
+      ...(options.vaultIndex
+        ? {
+            keyword_search: createKeywordSearchTool(options.vaultIndex, budget),
+          }
+        : {}),
+    };
+
     const agent = new ToolLoopAgent({
       model,
       instructions: system,
-      tools: { wikilink_resolve: createWikilinkTool(reader, budget) },
+      tools,
       stopWhen: stepCountIs(options.maxToolSteps ?? 10),
     });
 

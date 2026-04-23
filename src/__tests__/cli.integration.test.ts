@@ -1,10 +1,12 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Writable } from 'node:stream';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
 import { processCommand } from '../cli/index.js';
 import type { CliDeps } from '../cli/index.js';
+import { VaultIndex } from '../vault/vault-index.js';
 
 const FIXTURE_VAULT = path.resolve(import.meta.dirname, 'fixtures/test-vault');
 const MOCK_OUTPUT = '# Mira Shadowcloak\n\n**Role:** Spy\nA shadowy figure.';
@@ -154,5 +156,109 @@ describe('processCommand', () => {
 
     expect(state).toBeNull();
     expect(captured()).toContain('Error:');
+  });
+});
+
+describe('/index commands', () => {
+  let captured: () => string;
+  let baseDeps: Omit<CliDeps, 'vaultIndex'>;
+  const LORECRAFT_DIR = path.join(FIXTURE_VAULT, '.lorecraft');
+
+  beforeEach(() => {
+    const out = makeOutput();
+    captured = out.captured;
+    baseDeps = {
+      vaultRoot: FIXTURE_VAULT,
+      output: out.stream,
+    };
+  });
+
+  afterEach(async () => {
+    await fs.rm(LORECRAFT_DIR, { recursive: true, force: true });
+  });
+
+  it('/index rebuild: prints note count', async () => {
+    await processCommand('/index rebuild', null, {
+      ...baseDeps,
+      vaultIndex: null,
+    });
+    expect(captured()).toMatch(/Index built: \d+ notes indexed/);
+  });
+
+  it('/index status when fresh: prints note count and "fresh"', async () => {
+    const index = await VaultIndex.build(FIXTURE_VAULT);
+    await processCommand('/index status', null, {
+      ...baseDeps,
+      vaultIndex: index,
+    });
+    expect(captured()).toContain('notes');
+    expect(captured()).toContain('fresh');
+  });
+
+  it('/index status when stale: prints "stale"', async () => {
+    // Build against a slightly different note count by wrapping with a mock isStale
+    const index = await VaultIndex.build(FIXTURE_VAULT);
+    // Patch isStale to simulate a stale index without touching the filesystem
+    const staleIndex = Object.create(index) as VaultIndex;
+    Object.defineProperty(staleIndex, 'isStale', { value: async () => true });
+
+    await processCommand('/index status', null, {
+      ...baseDeps,
+      vaultIndex: staleIndex,
+    });
+    expect(captured()).toContain('stale');
+  });
+
+  it('/index refresh: prints added/updated/removed counts', async () => {
+    const index = await VaultIndex.build(FIXTURE_VAULT);
+    await processCommand('/index refresh', null, {
+      ...baseDeps,
+      vaultIndex: index,
+    });
+    expect(captured()).toMatch(/\d+ added, \d+ updated, \d+ removed/);
+  });
+
+  it('/index status with no index: prints error pointing to /index rebuild', async () => {
+    await processCommand('/index status', null, {
+      ...baseDeps,
+      vaultIndex: null,
+    });
+    expect(captured()).toContain('No index loaded');
+  });
+
+  it('/index refresh with no index: prints error pointing to /index rebuild', async () => {
+    await processCommand('/index refresh', null, {
+      ...baseDeps,
+      vaultIndex: null,
+    });
+    expect(captured()).toContain('No index loaded');
+  });
+
+  it('/generate with stale index: output contains stale warning', async () => {
+    const model = makeMockModel();
+    const index = await VaultIndex.build(FIXTURE_VAULT);
+    const staleIndex = Object.create(index) as VaultIndex;
+    Object.defineProperty(staleIndex, 'isStale', { value: async () => true });
+
+    const out = makeOutput();
+    await processCommand('/generate npc name:Mira role:Spy', null, {
+      ...baseDeps,
+      model,
+      output: out.stream,
+      vaultIndex: staleIndex,
+    });
+    expect(out.captured()).toContain('[warning] Index is stale');
+  });
+
+  it('/generate with no index (null): output contains info message', async () => {
+    const model = makeMockModel();
+    const out = makeOutput();
+    await processCommand('/generate npc name:Mira role:Spy', null, {
+      ...baseDeps,
+      model,
+      output: out.stream,
+      vaultIndex: null,
+    });
+    expect(out.captured()).toContain('[info] No keyword index');
   });
 });

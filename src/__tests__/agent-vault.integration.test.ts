@@ -7,6 +7,7 @@ import { TemplateParser } from '../vault/template-parser.js';
 import { ContextBudget } from '../agent/context-budget.js';
 import { buildPrompt } from '../agent/prompt-builder.js';
 import { GenerationSession } from '../agent/generation-loop.js';
+import { VaultIndex } from '../vault/vault-index.js';
 import type { ContextNote } from '../agent/prompt-builder.js';
 
 const FIXTURE_VAULT = path.resolve(import.meta.dirname, 'fixtures/test-vault');
@@ -133,5 +134,86 @@ describe('agent-vault integration', () => {
 
     expect(result.content).toBe(MOCK_TEXT);
     expect(result.usage.totalTokens).toBeGreaterThan(0);
+  });
+
+  it('GenerationSession with VaultIndex: keyword_search tool returns content from unlinked note', async () => {
+    const MOCK_TEXT =
+      '# Harbor Scene\n\nThe dockworkers eye you with suspicion.';
+    let callCount = 0;
+
+    const model = new MockLanguageModelV3({
+      doStream: async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          return {
+            stream: simulateReadableStream({
+              chunks: [
+                {
+                  type: 'tool-call',
+                  toolCallId: 'tc-kw-1',
+                  toolName: 'keyword_search',
+                  input: JSON.stringify({ query: 'dockworkers' }),
+                },
+                {
+                  type: 'finish',
+                  finishReason: {
+                    unified: 'tool-calls' as const,
+                    raw: undefined,
+                  },
+                  logprobs: undefined,
+                  usage: {
+                    inputTokens: {
+                      total: 10,
+                      noCache: 10,
+                      cacheRead: undefined,
+                      cacheWrite: undefined,
+                    },
+                    outputTokens: { total: 5, text: 5, reasoning: undefined },
+                  },
+                },
+              ],
+            }),
+          };
+        }
+        return {
+          stream: simulateReadableStream({
+            chunks: [
+              { type: 'text-start', id: 'text-1' },
+              { type: 'text-delta', id: 'text-1', delta: MOCK_TEXT },
+              { type: 'text-end', id: 'text-1' },
+              {
+                type: 'finish',
+                finishReason: { unified: 'stop' as const, raw: undefined },
+                logprobs: undefined,
+                usage: {
+                  inputTokens: {
+                    total: 20,
+                    noCache: 20,
+                    cacheRead: undefined,
+                    cacheWrite: undefined,
+                  },
+                  outputTokens: { total: 30, text: 30, reasoning: undefined },
+                },
+              },
+            ],
+          }),
+        };
+      },
+    });
+
+    const vaultIndex = await VaultIndex.build(FIXTURE_VAULT);
+
+    const session = await GenerationSession.create({
+      vaultRoot: FIXTURE_VAULT,
+      templatePath: NPC_TEMPLATE,
+      inputs: { name: 'Harbor Guard', role: 'Guard', faction: 'Thieves Guild' },
+      model,
+      vaultIndex,
+    });
+    const result = await session.generate();
+
+    expect(result.content).toBe(MOCK_TEXT);
+    // Two LLM calls: first emits keyword_search tool-call, second produces text
+    expect(callCount).toBe(2);
   });
 });

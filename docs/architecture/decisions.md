@@ -117,6 +117,27 @@
 
 ---
 
+## ADR-007: MiniSearch as the BM25 keyword index
+- **Date:** 2026-04-23
+- **Status:** Accepted
+- **Context:** Notes relevant to a generation request but not linked from anything
+  are invisible to the agent. A keyword index over all vault notes would let the
+  agent surface these notes during generation. The index algorithm needs to rank
+  results by relevance so the best notes reach the LLM first.
+- **Decision:** Use MiniSearch for the keyword index. MiniSearch applies BM25+
+  scoring by default (the same algorithm as Lucene/Elasticsearch for keyword
+  ranking), provides first-class JSON serialization (`toJSON()`/`loadJSON()`),
+  an incremental update API (`add`/`remove`/`replace`/`discard`), is ~7 KB
+  gzipped with zero native dependencies, and ships built-in TypeScript types.
+  Fuse.js targets fuzzy matching, not BM25-ranked full-text search. Orama also
+  supports BM25 and hybrid search natively, but adds ~90 KB and is more complex
+  than the MVP requires. A custom inverted index would be unnecessary reinvention.
+- **Consequences:** MiniSearch index stored locally in `{vaultRoot}/.lorecraft/`.
+  When v0.2 adds vector search (ADR-004), BM25 scores from MiniSearch combine
+  straightforwardly with vector scores via Reciprocal Rank Fusion.
+
+---
+
 ## Test file layout
 
 ```

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import type { LanguageModel } from 'ai';
 import { GenerationSession } from '../agent/generation-loop.js';
+import { VaultIndex } from '../vault/vault-index.js';
 import { initLogger, setVerbose, getLogger } from '../utils/logger.js';
 
 /** Injected dependencies for testing (replaces env vars and real model). */
@@ -11,6 +12,8 @@ export type CliDeps = {
   model?: LanguageModel;
   vaultRoot?: string;
   output?: NodeJS.WriteStream;
+  /** `null` means "no index loaded yet"; `undefined` falls back to no index. */
+  vaultIndex?: VaultIndex | null;
 };
 
 const DELIMITER = '─'.repeat(60);
@@ -99,6 +102,9 @@ export async function processCommand(
       [
         'Commands:',
         '  /generate <type> [key:value…]  Generate new content',
+        '  /index status                  Show index stats (note count, freshness)',
+        '  /index refresh                 Incrementally re-index changed vault files',
+        '  /index rebuild                 Build a fresh index over all vault files',
         '  /verbose on|off                Toggle verbose logging to stdout',
         '  /help                           Show this help',
         '  /exit                           Quit',
@@ -128,10 +134,67 @@ export async function processCommand(
     return state;
   }
 
+  if (command === '/index') {
+    const vaultRoot = deps?.vaultRoot ?? process.env['VAULT_ROOT'] ?? '';
+    const subcommand = args.trim();
+    const vaultIndex = deps?.vaultIndex ?? null;
+
+    if (subcommand === 'rebuild') {
+      log.info({}, 'rebuilding index');
+      const built = await VaultIndex.build(vaultRoot);
+      write(`Index built: ${built.stats.noteCount} notes indexed.\n`);
+      log.info({ noteCount: built.stats.noteCount }, 'index rebuilt');
+      return state;
+    }
+
+    if (vaultIndex === null) {
+      write('No index loaded. Run /index rebuild first.\n');
+      return state;
+    }
+
+    if (subcommand === 'status') {
+      const stale = await vaultIndex.isStale(vaultRoot);
+      const ts = vaultIndex.stats.indexedAt.toISOString();
+      write(
+        `Index: ${vaultIndex.stats.noteCount} notes, indexed at ${ts} — ${stale ? 'stale' : 'fresh'}.\n`,
+      );
+      return state;
+    }
+
+    if (subcommand === 'refresh') {
+      log.info({}, 'refreshing index');
+      const counts = await vaultIndex.update(vaultRoot);
+      write(
+        `Index refreshed: ${counts.added} added, ${counts.updated} updated, ${counts.removed} removed.\n`,
+      );
+      log.info(counts, 'index refreshed');
+      return state;
+    }
+
+    write('Usage: /index status | refresh | rebuild\n');
+    return state;
+  }
+
   if (command === '/generate') {
     const { type, inputs } = parseGenerateCommand(args);
     const vaultRoot = deps?.vaultRoot ?? process.env['VAULT_ROOT'] ?? '';
     const templatePath = path.join(vaultRoot, '_templates', `${type}.md`);
+    // Preserve null (no index built) vs undefined (deps not provided)
+    const rawVaultIndex = deps?.vaultIndex;
+    const vaultIndex = rawVaultIndex ?? undefined;
+
+    if (vaultIndex) {
+      const stale = await vaultIndex.isStale(vaultRoot);
+      if (stale) {
+        write(
+          '[warning] Index is stale — run /index refresh to include recent vault changes.\n',
+        );
+      }
+    } else if (rawVaultIndex === null) {
+      write(
+        '[info] No keyword index — run /index rebuild to enable keyword search.\n',
+      );
+    }
 
     log.info({ type, inputKeys: Object.keys(inputs) }, 'generation started');
     try {
@@ -140,6 +203,7 @@ export async function processCommand(
         templatePath,
         inputs,
         model: deps?.model,
+        vaultIndex,
       });
       write(DELIMITER + '\n');
       const result = await session.generate((chunk) => write(chunk));
@@ -174,13 +238,37 @@ export async function processCommand(
 export async function main(): Promise<void> {
   const verbose = process.argv.includes('--verbose');
   initLogger({ verbose });
+  const log = getLogger('cli');
+
+  const vaultRoot = process.env['VAULT_ROOT'] ?? '';
+  let vaultIndex: VaultIndex | null = await VaultIndex.load(vaultRoot);
+  if (vaultIndex) {
+    log.info({ noteCount: vaultIndex.stats.noteCount }, 'keyword index loaded');
+  }
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   let state: GenerationSession | null = null;
 
   rl.on('line', async (line) => {
     rl.pause();
-    state = await processCommand(line, state);
+
+    // /index rebuild is handled here so it can update the mutable vaultIndex
+    if (line.trim().startsWith('/index rebuild')) {
+      try {
+        vaultIndex = await VaultIndex.build(vaultRoot);
+        process.stdout.write(
+          `Index built: ${vaultIndex.stats.noteCount} notes indexed.\n`,
+        );
+        log.info({ noteCount: vaultIndex.stats.noteCount }, 'index rebuilt');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        process.stdout.write(`Error: ${msg}\n`);
+      }
+      rl.resume();
+      return;
+    }
+
+    state = await processCommand(line, state, { vaultRoot, vaultIndex });
     if (line.trim() === '/exit') {
       rl.close();
       return;
