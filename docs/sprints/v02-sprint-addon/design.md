@@ -131,7 +131,7 @@ export async function cmdStats(
 
 ### `pnpm inspect search <query> [--limit N]`
 
-1. `main()` parses argv, resolves `VAULT_PATH`.
+1. `main()` parses argv, resolves `VAULT_ROOT`.
 2. `VaultIndex.load(vaultRoot)` → `vaultIndex | null`.
 3. `VaultEmbeddings.load(vaultRoot)` → `embeddings | null`.
 4. `getEmbeddingProvider()` → `provider | null`.

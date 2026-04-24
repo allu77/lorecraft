@@ -55,7 +55,7 @@
   - Export `cmdStats(vaultRoot, vaultIndex, embeddings): Promise<string>`
     - BM25: noteCount, indexedAt, file sizes via `fs.stat()`, staleness via `isStale()`
     - Embeddings: noteCount, chunkCount, modelId, dimensions from meta, file sizes, staleness
-  - `main()`: parse `process.argv` for subcommand + args; resolve `VAULT_PATH`; load indexes; dispatch; exit with code 1 on error
+  - `main()`: parse `process.argv` for subcommand + args; resolve `VAULT_ROOT`; load indexes; dispatch; exit with code 1 on error
   - Arg parsing: `--limit N` (default 10); exit with usage message on unknown subcommand
 
 - [x] 005 — [test] Unit tests for all `inspect.ts` subcommand handlers
@@ -78,7 +78,7 @@
 - [x] 006 — Add `"inspect"` script to `package.json` and verify `pnpm inspect stats` runs end-to-end against the fixture vault
   (`package.json`)
   - Add `"inspect": "tsx src/cli/inspect.ts"` to scripts
-  - Smoke-test: `VAULT_PATH=src/__tests__/fixtures/test-vault pnpm inspect stats` — should print index stats or "not found" without crashing
+  - Smoke-test: `VAULT_ROOT=src/__tests__/fixtures/test-vault pnpm inspect stats` — should print index stats or "not found" without crashing
 
 ### Documentation and wrap-up
 

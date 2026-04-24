@@ -100,7 +100,7 @@ summary of both index files without opening them manually.
   internal MiniSearch `_index` state.
 - No new npm packages.
 - Plain text stdout; no colour library, no TUI.
-- Vault root resolved via `VAULT_PATH` env var (same as main CLI).
+- Vault root resolved via `VAULT_ROOT` env var (same as main CLI).
 - Must work without an embeddings provider configured (read-only; never calls Bedrock).
 
 ---

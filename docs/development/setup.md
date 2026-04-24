@@ -51,7 +51,7 @@ pnpm cli
 
 Point Lorecraft at your vault when prompted, or set:
 ```
-VAULT_PATH=/path/to/your/obsidian/vault
+VAULT_ROOT=/path/to/your/obsidian/vault
 ```
 
 ## Run tests
