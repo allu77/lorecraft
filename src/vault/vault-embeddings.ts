@@ -15,6 +15,8 @@ export type StoredChunkInfo = {
 export type EmbeddingSearchResult = {
   filePath: string;
   noteName: string;
+  /** Index of the best-matching chunk within the note. */
+  chunkIndex: number;
   /** The best-matching chunk text for this note. */
   content: string;
   /** Cosine similarity score in [0, 1]. */
@@ -317,6 +319,7 @@ export class VaultEmbeddings {
       .map(({ chunk, score }) => ({
         filePath: chunk.filePath,
         noteName: chunk.noteName,
+        chunkIndex: chunk.chunkIndex,
         content: chunk.chunkText,
         score,
       }));

@@ -70,7 +70,7 @@ export async function cmdSearch(
 
   // Semantic
   const semLines: string[] = [`=== Semantic results for "${query}" ===`];
-  let semResults: Array<{ noteName: string; score: number }> | null = null;
+  let semResults: Array<{ noteName: string; chunkIndex: number; score: number }> | null = null;
   if (embeddings && provider) {
     const results = await embeddings.searchByText(query, provider, limit);
     semResults = results;
@@ -78,8 +78,9 @@ export async function cmdSearch(
       semLines.push('  (no results)');
     } else {
       for (let i = 0; i < results.length; i++) {
+        const label = `${results[i].noteName} [chunk ${results[i].chunkIndex}]`;
         semLines.push(
-          ` ${String(i + 1).padStart(2)}. ${results[i].noteName.padEnd(30)} ${results[i].score.toFixed(3)}`,
+          ` ${String(i + 1).padStart(2)}. ${label.padEnd(38)} ${results[i].score.toFixed(3)}`,
         );
       }
     }
@@ -93,6 +94,8 @@ export async function cmdSearch(
   if (bm25Results && semResults) {
     const k = 60;
     const scores = new Map<string, number>();
+    // Track best chunk per note from semantic results for display
+    const semChunkByNote = new Map<string, number>();
     for (let i = 0; i < bm25Results.length; i++) {
       const n = bm25Results[i].noteName;
       scores.set(n, (scores.get(n) ?? 0) + 1 / (k + i + 1));
@@ -100,11 +103,15 @@ export async function cmdSearch(
     for (let i = 0; i < semResults.length; i++) {
       const n = semResults[i].noteName;
       scores.set(n, (scores.get(n) ?? 0) + 1 / (k + i + 1));
+      if (!semChunkByNote.has(n)) semChunkByNote.set(n, semResults[i].chunkIndex);
     }
     const ranked = [...scores.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
     for (let i = 0; i < ranked.length; i++) {
+      const [noteName, score] = ranked[i];
+      const chunkIdx = semChunkByNote.get(noteName);
+      const label = chunkIdx !== undefined ? `${noteName} [chunk ${chunkIdx}]` : noteName;
       hybridLines.push(
-        ` ${String(i + 1).padStart(2)}. ${ranked[i][0].padEnd(30)} ${ranked[i][1].toFixed(4)}`,
+        ` ${String(i + 1).padStart(2)}. ${label.padEnd(38)} ${score.toFixed(4)}`,
       );
     }
   } else {

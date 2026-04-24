@@ -274,12 +274,14 @@ async function callHybridExecute(
 const embResult1: EmbeddingSearchResult = {
   filePath: '/vault/Note One.md',
   noteName: 'Note One',
+  chunkIndex: 0,
   content: 'Semantic content of note one.',
   score: 0.9,
 };
 const embResult2: EmbeddingSearchResult = {
   filePath: '/vault/Note Two.md',
   noteName: 'Note Two',
+  chunkIndex: 0,
   content: 'Semantic content of note two.',
   score: 0.7,
 };
@@ -376,6 +378,7 @@ describe('createHybridSearchTool', () => {
     const semShared: EmbeddingSearchResult = {
       filePath: sharedFilePath,
       noteName: 'Shared',
+      chunkIndex: 0,
       content: 'Content of the shared note.',
       score: 0.8,
     };
