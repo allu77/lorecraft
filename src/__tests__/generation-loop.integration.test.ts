@@ -37,7 +37,7 @@ function makeMockModel(text = MOCK_OUTPUT) {
 }
 
 describe('GenerationSession integration', () => {
-  it('happy path: returns content and usage, calls onChunk', async () => {
+  it('happy path: returns content and usage, calls onText', async () => {
     const chunks: string[] = [];
     const session = await GenerationSession.create({
       vaultRoot: FIXTURE_VAULT,
@@ -45,7 +45,7 @@ describe('GenerationSession integration', () => {
       inputs: { name: 'Mira Shadowcloak', role: 'Spy' },
       model: makeMockModel(),
     });
-    const result = await session.generate((c: string) => chunks.push(c));
+    const result = await session.generate({ onText: (c) => chunks.push(c) });
 
     expect(result.content).toBe(MOCK_OUTPUT);
     expect(result.usage.inputTokens).toBeTypeOf('number');

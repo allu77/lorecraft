@@ -69,6 +69,23 @@ export type GenerateOptions = {
   embeddingProvider?: EmbeddingProvider;
 };
 
+/**
+ * Optional callbacks for streaming events from `GenerationSession.generate()` or
+ * `GenerationSession.continue()`. All fields are optional — omit any you don't need.
+ */
+export type StreamCallbacks = {
+  /** Called with each text chunk as it arrives. */
+  onText?: (chunk: string) => void;
+  /** Called once when a reasoning (thinking) block begins. */
+  onReasoningStart?: () => void;
+  /** Called with each incremental reasoning text delta. */
+  onReasoningDelta?: (delta: string) => void;
+  /** Called once when a reasoning block ends. */
+  onReasoningEnd?: () => void;
+  /** Called once per tool invocation with the tool name and its input params. */
+  onToolCall?: (toolName: string, input: unknown) => void;
+};
+
 /** Result returned by `GenerationSession.generate()` or `GenerationSession.continue()`. */
 export type GenerateResult = {
   /** Full generated markdown text. */
@@ -228,10 +245,10 @@ export class GenerationSession {
    * Sends the assembled prompt as the first user message and streams the response.
    * Call once per session after `create()`.
    *
-   * @param onChunk - Optional callback called with each text chunk as it arrives.
+   * @param callbacks - Optional stream event callbacks (text, reasoning, tool calls).
    * @returns `GenerateResult` with the full content and cumulative token usage.
    */
-  async generate(onChunk?: (chunk: string) => void): Promise<GenerateResult> {
+  async generate(callbacks?: StreamCallbacks): Promise<GenerateResult> {
     const log = getLogger('agent');
     log.debug({ prompt: this.initialPrompt }, 'prompt sent');
     log.info({}, 'stream started');
@@ -240,9 +257,25 @@ export class GenerationSession {
       prompt: this.initialPrompt,
     });
     const chunks: string[] = [];
-    for await (const chunk of streamResult.textStream) {
-      chunks.push(chunk);
-      onChunk?.(chunk);
+    for await (const part of streamResult.fullStream) {
+      switch (part.type) {
+        case 'text-delta':
+          chunks.push(part.text);
+          callbacks?.onText?.(part.text);
+          break;
+        case 'reasoning-start':
+          callbacks?.onReasoningStart?.();
+          break;
+        case 'reasoning-delta':
+          callbacks?.onReasoningDelta?.(part.text);
+          break;
+        case 'reasoning-end':
+          callbacks?.onReasoningEnd?.();
+          break;
+        case 'tool-call':
+          callbacks?.onToolCall?.(part.toolName, part.input);
+          break;
+      }
     }
 
     const content = chunks.join('');
@@ -270,12 +303,12 @@ export class GenerationSession {
    * response. Accumulates message history across calls.
    *
    * @param userMessage - The GM's free-form follow-up message.
-   * @param onChunk - Optional callback called with each text chunk as it arrives.
+   * @param callbacks - Optional stream event callbacks (text, reasoning, tool calls).
    * @returns `GenerateResult` with the new content and cumulative token usage.
    */
   async continue(
     userMessage: string,
-    onChunk?: (chunk: string) => void,
+    callbacks?: StreamCallbacks,
   ): Promise<GenerateResult> {
     const log = getLogger('agent');
 
@@ -289,9 +322,25 @@ export class GenerationSession {
 
     const streamResult = await this.agent.stream({ messages: this.messages });
     const chunks: string[] = [];
-    for await (const chunk of streamResult.textStream) {
-      chunks.push(chunk);
-      onChunk?.(chunk);
+    for await (const part of streamResult.fullStream) {
+      switch (part.type) {
+        case 'text-delta':
+          chunks.push(part.text);
+          callbacks?.onText?.(part.text);
+          break;
+        case 'reasoning-start':
+          callbacks?.onReasoningStart?.();
+          break;
+        case 'reasoning-delta':
+          callbacks?.onReasoningDelta?.(part.text);
+          break;
+        case 'reasoning-end':
+          callbacks?.onReasoningEnd?.();
+          break;
+        case 'tool-call':
+          callbacks?.onToolCall?.(part.toolName, part.input);
+          break;
+      }
     }
 
     const content = chunks.join('');
