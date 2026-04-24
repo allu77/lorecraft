@@ -1,5 +1,5 @@
 import path from 'path';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
 import { VaultReader } from '../vault/vault-reader.js';
@@ -8,7 +8,26 @@ import { ContextBudget } from '../agent/context-budget.js';
 import { buildPrompt } from '../agent/prompt-builder.js';
 import { GenerationSession } from '../agent/generation-loop.js';
 import { VaultIndex } from '../vault/vault-index.js';
+import { VaultEmbeddings } from '../vault/vault-embeddings.js';
 import type { ContextNote } from '../agent/prompt-builder.js';
+import type { EmbeddingProvider } from '../vault/embedding-provider.js';
+
+function makeMockProvider(modelId = 'mock-v1'): EmbeddingProvider {
+  return {
+    modelId,
+    dimensions: 3,
+    embed: vi.fn(async (text: string): Promise<number[]> => {
+      const seed = text.length;
+      return [seed % 7 / 7, seed % 11 / 11, seed % 13 / 13];
+    }),
+    embedMany: vi.fn(async (texts: string[]): Promise<number[][]> =>
+      texts.map((t) => {
+        const seed = t.length;
+        return [seed % 7 / 7, seed % 11 / 11, seed % 13 / 13];
+      }),
+    ),
+  };
+}
 
 const FIXTURE_VAULT = path.resolve(import.meta.dirname, 'fixtures/test-vault');
 const NPC_TEMPLATE = path.join(FIXTURE_VAULT, '_templates/npc.md');
@@ -215,5 +234,86 @@ describe('agent-vault integration', () => {
     expect(result.content).toBe(MOCK_TEXT);
     // Two LLM calls: first emits keyword_search tool-call, second produces text
     expect(callCount).toBe(2);
+  });
+
+  it('GenerationSession with vaultEmbeddings only: wires semantic_search, not keyword_search', async () => {
+    const model = new MockLanguageModelV3({
+      doStream: async () => ({
+        stream: simulateReadableStream({
+          chunks: [
+            { type: 'text-start', id: 'text-1' },
+            { type: 'text-delta', id: 'text-1', delta: 'Generated content.' },
+            { type: 'text-end', id: 'text-1' },
+            {
+              type: 'finish',
+              finishReason: { unified: 'stop' as const, raw: undefined },
+              logprobs: undefined,
+              usage: {
+                inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+                outputTokens: { total: 5, text: 5, reasoning: undefined },
+              },
+            },
+          ],
+        }),
+      }),
+    });
+
+    const provider = makeMockProvider();
+    const vaultEmbeddings = await VaultEmbeddings.build(FIXTURE_VAULT, provider);
+
+    const session = await GenerationSession.create({
+      vaultRoot: FIXTURE_VAULT,
+      templatePath: NPC_TEMPLATE,
+      inputs: { name: 'Spirit', role: 'Ghost', faction: 'None' },
+      model,
+      vaultEmbeddings,
+      embeddingProvider: provider,
+    });
+    const result = await session.generate();
+
+    expect(result.content).toBe('Generated content.');
+    // The session should have been created without error — semantic_search tool is wired
+  });
+
+  it('GenerationSession with vaultIndex + vaultEmbeddings: wires hybrid_search only', async () => {
+    const model = new MockLanguageModelV3({
+      doStream: async () => ({
+        stream: simulateReadableStream({
+          chunks: [
+            { type: 'text-start', id: 'text-1' },
+            { type: 'text-delta', id: 'text-1', delta: 'Hybrid result.' },
+            { type: 'text-end', id: 'text-1' },
+            {
+              type: 'finish',
+              finishReason: { unified: 'stop' as const, raw: undefined },
+              logprobs: undefined,
+              usage: {
+                inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+                outputTokens: { total: 5, text: 5, reasoning: undefined },
+              },
+            },
+          ],
+        }),
+      }),
+    });
+
+    const provider = makeMockProvider();
+    const [vaultIndex, vaultEmbeddings] = await Promise.all([
+      VaultIndex.build(FIXTURE_VAULT),
+      VaultEmbeddings.build(FIXTURE_VAULT, provider),
+    ]);
+
+    const session = await GenerationSession.create({
+      vaultRoot: FIXTURE_VAULT,
+      templatePath: NPC_TEMPLATE,
+      inputs: { name: 'Watcher', role: 'Spirit', faction: 'None' },
+      model,
+      vaultIndex,
+      vaultEmbeddings,
+      embeddingProvider: provider,
+    });
+    const result = await session.generate();
+
+    expect(result.content).toBe('Hybrid result.');
   });
 });

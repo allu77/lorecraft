@@ -9,7 +9,14 @@ import type { ContextNote } from './prompt-builder.js';
 import { getModel } from '../llm/provider.js';
 import { getLogger } from '../utils/logger.js';
 import type { VaultIndex } from '../vault/vault-index.js';
-import { createWikilinkTool, createKeywordSearchTool } from './tools.js';
+import type { VaultEmbeddings } from '../vault/vault-embeddings.js';
+import type { EmbeddingProvider } from '../vault/embedding-provider.js';
+import {
+  createWikilinkTool,
+  createKeywordSearchTool,
+  createSemanticSearchTool,
+  createHybridSearchTool,
+} from './tools.js';
 
 /** Token counts as reported by the Vercel AI SDK after a generation call. */
 export type TokenUsage = {
@@ -46,10 +53,20 @@ export type GenerateOptions = {
   maxToolSteps?: number;
   /**
    * Loaded `VaultIndex` to enable keyword search during generation. When
-   * provided, the agent can call `keyword_search` to surface notes that are
-   * not reachable via wikilinks. Omit to run without keyword search.
+   * provided alongside `vaultEmbeddings`, the agent uses hybrid search instead.
    */
   vaultIndex?: VaultIndex;
+  /**
+   * Loaded `VaultEmbeddings` to enable semantic search during generation.
+   * Requires `embeddingProvider`. When both `vaultIndex` and `vaultEmbeddings`
+   * are provided, the agent uses `hybrid_search` (BM25 + semantic via RRF).
+   */
+  vaultEmbeddings?: VaultEmbeddings;
+  /**
+   * Embedding provider used to embed query strings for semantic / hybrid search.
+   * Required when `vaultEmbeddings` is provided.
+   */
+  embeddingProvider?: EmbeddingProvider;
 };
 
 /**
@@ -92,6 +109,8 @@ const DEFAULT_BUDGET_TOKENS = 8_000;
 type SessionTools = {
   wikilink_resolve: ReturnType<typeof createWikilinkTool>;
   keyword_search?: ReturnType<typeof createKeywordSearchTool>;
+  semantic_search?: ReturnType<typeof createSemanticSearchTool>;
+  hybrid_search?: ReturnType<typeof createHybridSearchTool>;
 } & ToolSet;
 
 export class GenerationSession {
@@ -208,12 +227,9 @@ export class GenerationSession {
 
     const tools: SessionTools = {
       wikilink_resolve: createWikilinkTool(reader, budget),
-      ...(options.vaultIndex
-        ? {
-            keyword_search: createKeywordSearchTool(options.vaultIndex, budget),
-          }
-        : {}),
+      ...buildSearchTools(options, budget, reader),
     };
+
 
     const agent = new ToolLoopAgent({
       model,
@@ -343,6 +359,46 @@ export class GenerationSession {
       usage: normalizeUsage(usage),
     };
   }
+}
+
+/**
+ * Selects the appropriate search tool(s) based on what indexes are available.
+ *
+ * Selection rules (auto-detected from options):
+ * - vaultIndex + vaultEmbeddings + embeddingProvider → hybrid_search only
+ * - vaultEmbeddings + embeddingProvider only           → semantic_search
+ * - vaultIndex only                                   → keyword_search
+ * - neither                                           → no search tool (wikilinks only)
+ */
+function buildSearchTools(
+  options: GenerateOptions,
+  budget: ContextBudget,
+  _reader: VaultReader,
+): Partial<SessionTools> {
+  const { vaultIndex, vaultEmbeddings, embeddingProvider } = options;
+
+  if (vaultIndex && vaultEmbeddings && embeddingProvider) {
+    return {
+      hybrid_search: createHybridSearchTool(
+        vaultIndex,
+        vaultEmbeddings,
+        embeddingProvider,
+        budget,
+      ),
+    };
+  }
+
+  if (vaultEmbeddings && embeddingProvider) {
+    return {
+      semantic_search: createSemanticSearchTool(vaultEmbeddings, embeddingProvider, budget),
+    };
+  }
+
+  if (vaultIndex) {
+    return { keyword_search: createKeywordSearchTool(vaultIndex, budget) };
+  }
+
+  return {};
 }
 
 function normalizeUsage(usage: {

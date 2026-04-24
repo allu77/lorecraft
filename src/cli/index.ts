@@ -6,6 +6,9 @@ import type { LanguageModel } from 'ai';
 import { GenerationSession } from '../agent/generation-loop.js';
 import type { StreamCallbacks } from '../agent/generation-loop.js';
 import { VaultIndex } from '../vault/vault-index.js';
+import { VaultEmbeddings } from '../vault/vault-embeddings.js';
+import { getEmbeddingProvider } from '../vault/embedding-provider.js';
+import type { EmbeddingProvider } from '../vault/embedding-provider.js';
 import {
   initLogger,
   setVerbose,
@@ -20,6 +23,10 @@ export type CliDeps = {
   output?: NodeJS.WriteStream;
   /** `null` means "no index loaded yet"; `undefined` falls back to no index. */
   vaultIndex?: VaultIndex | null;
+  /** `null` means "no embedding index loaded yet"; `undefined` means not configured. */
+  vaultEmbeddings?: VaultEmbeddings | null;
+  /** Injected embedding provider; omit when EMBEDDING_PROVIDER env var is not set. */
+  embeddingProvider?: EmbeddingProvider | null;
 };
 
 const DELIMITER = '─'.repeat(60);
@@ -175,11 +182,19 @@ export async function processCommand(
     const vaultRoot = deps?.vaultRoot ?? process.env['VAULT_ROOT'] ?? '';
     const subcommand = args.trim();
     const vaultIndex = deps?.vaultIndex ?? null;
+    const vaultEmbeddings = deps?.vaultEmbeddings;
+    const embeddingProvider = deps?.embeddingProvider ?? null;
 
     if (subcommand === 'rebuild') {
+      // rebuild is handled in main() to update mutable references; this branch
+      // is reached only in tests via deps injection.
       log.info({}, 'rebuilding index');
       const built = await VaultIndex.build(vaultRoot);
-      write(`Index built: ${built.stats.noteCount} notes indexed.\n`);
+      write(`BM25 index built: ${built.stats.noteCount} notes indexed.\n`);
+      if (embeddingProvider) {
+        const builtEmb = await VaultEmbeddings.build(vaultRoot, embeddingProvider);
+        write(`Embedding index built: ${builtEmb.stats.noteCount} notes embedded (${embeddingProvider.modelId}).\n`);
+      }
       log.info({ noteCount: built.stats.noteCount }, 'index rebuilt');
       return state;
     }
@@ -193,8 +208,17 @@ export async function processCommand(
       const stale = await vaultIndex.isStale(vaultRoot);
       const ts = vaultIndex.stats.indexedAt.toISOString();
       write(
-        `Index: ${vaultIndex.stats.noteCount} notes, indexed at ${ts} — ${stale ? 'stale' : 'fresh'}.\n`,
+        `BM25 index: ${vaultIndex.stats.noteCount} notes, indexed at ${ts} — ${stale ? 'stale' : 'fresh'}.\n`,
       );
+      if (vaultEmbeddings) {
+        const embStale = await vaultEmbeddings.isStale(vaultRoot, embeddingProvider ?? undefined);
+        const embTs = vaultEmbeddings.stats.indexedAt.toISOString();
+        write(
+          `Embedding index: ${vaultEmbeddings.stats.noteCount} notes, model ${vaultEmbeddings.stats.modelId}, indexed at ${embTs} — ${embStale ? 'stale' : 'fresh'}.\n`,
+        );
+      } else if (embeddingProvider) {
+        write(`Embedding index: not built yet — run /index rebuild.\n`);
+      }
       return state;
     }
 
@@ -202,8 +226,14 @@ export async function processCommand(
       log.info({}, 'refreshing index');
       const counts = await vaultIndex.update(vaultRoot);
       write(
-        `Index refreshed: ${counts.added} added, ${counts.updated} updated, ${counts.removed} removed.\n`,
+        `BM25 index refreshed: ${counts.added} added, ${counts.updated} updated, ${counts.removed} removed.\n`,
       );
+      if (vaultEmbeddings && embeddingProvider) {
+        const embCounts = await vaultEmbeddings.update(vaultRoot, embeddingProvider);
+        write(
+          `Embedding index refreshed: ${embCounts.added} added, ${embCounts.updated} updated, ${embCounts.removed} removed.\n`,
+        );
+      }
       log.info(counts, 'index refreshed');
       return state;
     }
@@ -219,18 +249,36 @@ export async function processCommand(
     // Preserve null (no index built) vs undefined (deps not provided)
     const rawVaultIndex = deps?.vaultIndex;
     const vaultIndex = rawVaultIndex ?? undefined;
+    const rawVaultEmbeddings = deps?.vaultEmbeddings;
+    const vaultEmbeddings = rawVaultEmbeddings ?? undefined;
+    const embeddingProvider = deps?.embeddingProvider ?? undefined;
 
     if (vaultIndex) {
       const stale = await vaultIndex.isStale(vaultRoot);
       if (stale) {
         write(
-          '[warning] Index is stale — run /index refresh to include recent vault changes.\n',
+          '[warning] BM25 index is stale — run /index refresh to include recent vault changes.\n',
         );
       }
     } else if (rawVaultIndex === null) {
       write(
         '[info] No keyword index — run /index rebuild to enable keyword search.\n',
       );
+    }
+
+    if (embeddingProvider) {
+      if (!vaultEmbeddings) {
+        write(
+          '[info] No embedding index — run /index rebuild to enable semantic search.\n',
+        );
+      } else {
+        const embStale = await vaultEmbeddings.isStale(vaultRoot, embeddingProvider);
+        if (embStale) {
+          write(
+            '[warning] Embedding index is stale — run /index refresh to include recent vault changes.\n',
+          );
+        }
+      }
     }
 
     log.info({ type, inputKeys: Object.keys(inputs) }, 'generation started');
@@ -241,6 +289,8 @@ export async function processCommand(
         inputs,
         model: deps?.model,
         vaultIndex,
+        vaultEmbeddings,
+        embeddingProvider,
       });
       write(DELIMITER + '\n');
       const result = await session.generate(buildCallbacks(out));
@@ -283,6 +333,17 @@ export async function main(): Promise<void> {
     log.info({ noteCount: vaultIndex.stats.noteCount }, 'keyword index loaded');
   }
 
+  const embeddingProvider: EmbeddingProvider | null = getEmbeddingProvider();
+  let vaultEmbeddings: VaultEmbeddings | null = embeddingProvider
+    ? await VaultEmbeddings.load(vaultRoot)
+    : null;
+  if (vaultEmbeddings) {
+    log.info(
+      { noteCount: vaultEmbeddings.stats.noteCount, modelId: vaultEmbeddings.stats.modelId },
+      'embedding index loaded',
+    );
+  }
+
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -296,13 +357,25 @@ export async function main(): Promise<void> {
     rl.pause();
 
     // /index rebuild is handled here so it can update the mutable vaultIndex
+    // and vaultEmbeddings references.
     if (line.trim().startsWith('/index rebuild')) {
       try {
         vaultIndex = await VaultIndex.build(vaultRoot);
         process.stdout.write(
-          `Index built: ${vaultIndex.stats.noteCount} notes indexed.\n`,
+          `BM25 index built: ${vaultIndex.stats.noteCount} notes indexed.\n`,
         );
         log.info({ noteCount: vaultIndex.stats.noteCount }, 'index rebuilt');
+
+        if (embeddingProvider) {
+          vaultEmbeddings = await VaultEmbeddings.build(vaultRoot, embeddingProvider);
+          process.stdout.write(
+            `Embedding index built: ${vaultEmbeddings.stats.noteCount} notes embedded (${embeddingProvider.modelId}).\n`,
+          );
+          log.info(
+            { noteCount: vaultEmbeddings.stats.noteCount, modelId: embeddingProvider.modelId },
+            'embedding index rebuilt',
+          );
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         process.stdout.write(`Error: ${msg}\n`);
@@ -312,7 +385,12 @@ export async function main(): Promise<void> {
       return;
     }
 
-    state = await processCommand(line, state, { vaultRoot, vaultIndex });
+    state = await processCommand(line, state, {
+      vaultRoot,
+      vaultIndex,
+      vaultEmbeddings,
+      embeddingProvider,
+    });
     if (line.trim() === '/exit') {
       rl.close();
       return;
