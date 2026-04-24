@@ -5,6 +5,12 @@ import { chunkNote } from './note-chunker.js';
 import type { EmbeddingProvider } from './embedding-provider.js';
 import { getLogger } from '../utils/logger.js';
 
+/** A single chunk as stored in the embedding index (vectors excluded). */
+export type StoredChunkInfo = {
+  chunkIndex: number;
+  chunkText: string;
+};
+
 /** A single search result returned by `VaultEmbeddings.search()`. */
 export type EmbeddingSearchResult = {
   filePath: string;
@@ -330,6 +336,25 @@ export class VaultEmbeddings {
   ): Promise<EmbeddingSearchResult[]> {
     const queryVector = await provider.embed(query);
     return this.search(queryVector, limit);
+  }
+
+  /**
+   * Returns all stored chunks for a note, ordered by chunk index.
+   * Returns `null` if the note has no chunks in the index.
+   *
+   * @param noteName - The note's base filename without extension.
+   */
+  getChunks(noteName: string): StoredChunkInfo[] | null {
+    const chunks = this.chunks
+      .filter((c) => c.noteName === noteName)
+      .sort((a, b) => a.chunkIndex - b.chunkIndex)
+      .map(({ chunkIndex, chunkText }) => ({ chunkIndex, chunkText }));
+    return chunks.length === 0 ? null : chunks;
+  }
+
+  /** Total number of chunks stored across all notes. */
+  get chunkCount(): number {
+    return this.chunks.length;
   }
 
   /** Summary statistics for the current index state. */

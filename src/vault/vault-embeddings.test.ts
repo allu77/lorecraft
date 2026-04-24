@@ -173,6 +173,47 @@ describe('VaultEmbeddings', () => {
     expect(index.stats.noteCount).toBe(before - 1);
   });
 
+  it('getChunks() returns chunks ordered by chunkIndex for a note with multiple chunks', async () => {
+    const index = await VaultEmbeddings.build(vaultRoot, provider);
+    // Find a note that has chunks in the index
+    const allResults = index.search(await provider.embed('test'), 100);
+    const noteName = allResults[0]?.noteName;
+    expect(noteName).toBeDefined();
+
+    const chunks = index.getChunks(noteName!);
+    expect(chunks).not.toBeNull();
+    if (chunks && chunks.length > 1) {
+      for (let i = 1; i < chunks.length; i++) {
+        expect(chunks[i].chunkIndex).toBeGreaterThan(chunks[i - 1].chunkIndex);
+      }
+    }
+  });
+
+  it('getChunks() returns null for a note not in the index', async () => {
+    const index = await VaultEmbeddings.build(vaultRoot, provider);
+    expect(index.getChunks('NonExistentNote')).toBeNull();
+  });
+
+  it('getChunks() does not include vector field in returned objects', async () => {
+    const index = await VaultEmbeddings.build(vaultRoot, provider);
+    const allResults = index.search(await provider.embed('test'), 100);
+    const noteName = allResults[0]?.noteName;
+    expect(noteName).toBeDefined();
+
+    const chunks = index.getChunks(noteName!);
+    expect(chunks).not.toBeNull();
+    for (const chunk of chunks!) {
+      expect(Object.keys(chunk)).toEqual(['chunkIndex', 'chunkText']);
+    }
+  });
+
+  it('chunkCount returns total chunk count across all notes', async () => {
+    const index = await VaultEmbeddings.build(vaultRoot, provider);
+    expect(index.chunkCount).toBeGreaterThan(0);
+    // chunkCount should be >= noteCount (each note has at least one chunk)
+    expect(index.chunkCount).toBeGreaterThanOrEqual(index.stats.noteCount);
+  });
+
   it('searchByText() embeds the query then returns ranked results', async () => {
     const index = await VaultEmbeddings.build(vaultRoot, provider);
     const results = await index.searchByText('thieves guild', provider, 3);
