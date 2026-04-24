@@ -255,9 +255,9 @@ async function main(): Promise<void> {
 
   const subcommand = argv[0];
 
-  const vaultRoot = process.env['VAULT_PATH'];
+  const vaultRoot = process.env['VAULT_ROOT'];
   if (!vaultRoot) {
-    process.stderr.write('VAULT_PATH environment variable is required\n');
+    process.stderr.write('VAULT_ROOT environment variable is required\n');
     process.exit(1);
   }
 
