@@ -26,6 +26,7 @@ export type EmbeddingIndexStats = {
   noteCount: number;
   indexedAt: Date;
   modelId: string;
+  dimensions: number;
 };
 
 type StoredChunk = {
@@ -363,6 +364,7 @@ export class VaultEmbeddings {
       noteCount: this.meta.noteCount,
       indexedAt: new Date(this.meta.indexedAt),
       modelId: this.meta.modelId,
+      dimensions: this.meta.dimensions,
     };
   }
 
