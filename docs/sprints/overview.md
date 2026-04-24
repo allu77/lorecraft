@@ -10,7 +10,7 @@
 | [mvp-sprint-05](mvp-sprint-05/) | WikiLink Resolution Agentic Tool | Complete |
 | [v01-sprints](v01-sprints/) | BM25 Keyword Search | Complete |
 | [v02-sprints](v02-sprints/) | Semantic Search via Embeddings | In Progress |
-| [v02-sprint-addon](v02-sprint-addon/) | Index Inspector | In Progress |
+| [v02-sprint-addon](v02-sprint-addon/) | Index Inspector | Complete |
 
 ---
 
