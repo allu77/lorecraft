@@ -4,7 +4,7 @@ import { Writable } from 'node:stream';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
-import { processCommand } from '../cli/index.js';
+import { CliSession } from '../cli/index.js';
 import type { CliDeps } from '../cli/index.js';
 import { VaultIndex } from '../vault/vault-index.js';
 import { VaultEmbeddings } from '../vault/vault-embeddings.js';
@@ -69,7 +69,7 @@ function makeOutput(): { stream: NodeJS.WriteStream; captured: () => string } {
   return { stream, captured: () => chunks.join('') };
 }
 
-describe('processCommand', () => {
+describe('CliSession.processCommand', () => {
   let deps: CliDeps;
   let captured: () => string;
 
@@ -84,96 +84,62 @@ describe('processCommand', () => {
   });
 
   it('/generate happy path: returns non-null state, streams content, prints token report', async () => {
-    const state = await processCommand(
-      '/generate npc name:Mira role:Spy',
-      null,
-      deps,
-    );
+    const session = new CliSession(deps);
+    await session.processCommand('/generate npc name:Mira role:Spy');
 
-    expect(state).not.toBeNull();
+    expect(session.currentState).not.toBeNull();
     expect(captured()).toContain(MOCK_OUTPUT);
     expect(captured()).toContain('Tokens:');
   });
 
-  it('continuation turn: session non-null, streams second response', async () => {
-    const firstState = await processCommand(
-      '/generate npc name:Mira role:Spy',
-      null,
-      deps,
-    );
+  it('continuation turn: same session holds state, streams second response', async () => {
+    const session = new CliSession(deps);
+    await session.processCommand('/generate npc name:Mira role:Spy');
+    const stateAfterGenerate = session.currentState;
 
-    const continueOut = makeOutput();
-    const continueDeps: CliDeps = {
-      // Session model is fixed at creation time; model in continueDeps is ignored
-      vaultRoot: FIXTURE_VAULT,
-      output: continueOut.stream,
-    };
-    const secondState = await processCommand(
-      'Give this NPC a weird habit.',
-      firstState,
-      continueDeps,
-    );
+    await session.processCommand('Give this NPC a weird habit.');
 
-    expect(secondState).not.toBeNull();
-    expect(secondState).toBe(firstState);
-    expect(continueOut.captured()).toContain('Tokens:');
+    expect(session.currentState).not.toBeNull();
+    expect(session.currentState).toBe(stateAfterGenerate);
+    expect(captured()).toContain('Tokens:');
   });
 
   it('/generate resets state: second generate returns a fresh session', async () => {
-    const firstState = await processCommand(
-      '/generate npc name:Mira role:Spy',
-      null,
-      deps,
-    );
+    const session = new CliSession(deps);
+    await session.processCommand('/generate npc name:Mira role:Spy');
+    const stateAfterFirst = session.currentState;
 
-    const secondOut = makeOutput();
-    const secondDeps: CliDeps = {
-      model: makeMockModel(),
-      vaultRoot: FIXTURE_VAULT,
-      output: secondOut.stream,
-    };
-    const secondState = await processCommand(
-      '/generate npc name:Aldric role:Guard',
-      firstState,
-      secondDeps,
-    );
+    await session.processCommand('/generate npc name:Aldric role:Guard');
 
-    expect(secondState).not.toBeNull();
-    expect(secondState).not.toBe(firstState);
-    expect(secondOut.captured()).toContain(MOCK_OUTPUT);
+    expect(session.currentState).not.toBeNull();
+    expect(session.currentState).not.toBe(stateAfterFirst);
+    expect(captured()).toContain(MOCK_OUTPUT);
   });
 
   it('free-form with no active conversation: state stays null, output contains hint', async () => {
-    const state = await processCommand(
-      'Give this NPC a weird habit.',
-      null,
-      deps,
-    );
+    const session = new CliSession(deps);
+    await session.processCommand('Give this NPC a weird habit.');
 
-    expect(state).toBeNull();
+    expect(session.currentState).toBeNull();
     expect(captured()).toContain('No active conversation');
   });
 
   it('unknown slash command: state unchanged, output contains error hint', async () => {
-    const prevState = await processCommand(
-      '/generate npc name:Mira role:Spy',
-      null,
-      deps,
-    );
-    const state = await processCommand('/unknown', prevState, deps);
+    const session = new CliSession(deps);
+    await session.processCommand('/generate npc name:Mira role:Spy');
+    const stateBeforeUnknown = session.currentState;
 
-    expect(state).toBe(prevState);
+    await session.processCommand('/unknown');
+
+    expect(session.currentState).toBe(stateBeforeUnknown);
     expect(captured()).toContain('Unknown command');
   });
 
   it('template not found: output contains error, state stays null', async () => {
-    const state = await processCommand(
-      '/generate ghost name:Banshee role:Haunt',
-      null,
-      deps,
-    );
+    const session = new CliSession(deps);
+    await session.processCommand('/generate ghost name:Banshee role:Haunt');
 
-    expect(state).toBeNull();
+    expect(session.currentState).toBeNull();
     expect(captured()).toContain('Error:');
   });
 });
@@ -197,59 +163,45 @@ describe('/index commands', () => {
   });
 
   it('/index rebuild: prints note count', async () => {
-    await processCommand('/index rebuild', null, {
-      ...baseDeps,
-      vaultIndex: null,
-    });
+    const session = new CliSession({ ...baseDeps, vaultIndex: null });
+    await session.processCommand('/index rebuild');
     expect(captured()).toMatch(/BM25 index built: \d+ notes indexed/);
   });
 
   it('/index status when fresh: prints note count and "fresh"', async () => {
     const index = await VaultIndex.build(FIXTURE_VAULT);
-    await processCommand('/index status', null, {
-      ...baseDeps,
-      vaultIndex: index,
-    });
+    const session = new CliSession({ ...baseDeps, vaultIndex: index });
+    await session.processCommand('/index status');
     expect(captured()).toContain('notes');
     expect(captured()).toContain('fresh');
   });
 
   it('/index status when stale: prints "stale"', async () => {
-    // Build against a slightly different note count by wrapping with a mock isStale
     const index = await VaultIndex.build(FIXTURE_VAULT);
-    // Patch isStale to simulate a stale index without touching the filesystem
     const staleIndex = Object.create(index) as VaultIndex;
     Object.defineProperty(staleIndex, 'isStale', { value: async () => true });
 
-    await processCommand('/index status', null, {
-      ...baseDeps,
-      vaultIndex: staleIndex,
-    });
+    const session = new CliSession({ ...baseDeps, vaultIndex: staleIndex });
+    await session.processCommand('/index status');
     expect(captured()).toContain('stale');
   });
 
   it('/index refresh: prints added/updated/removed counts', async () => {
     const index = await VaultIndex.build(FIXTURE_VAULT);
-    await processCommand('/index refresh', null, {
-      ...baseDeps,
-      vaultIndex: index,
-    });
+    const session = new CliSession({ ...baseDeps, vaultIndex: index });
+    await session.processCommand('/index refresh');
     expect(captured()).toMatch(/\d+ added, \d+ updated, \d+ removed/);
   });
 
   it('/index status with no index: prints error pointing to /index rebuild', async () => {
-    await processCommand('/index status', null, {
-      ...baseDeps,
-      vaultIndex: null,
-    });
+    const session = new CliSession({ ...baseDeps, vaultIndex: null });
+    await session.processCommand('/index status');
     expect(captured()).toContain('No index loaded');
   });
 
   it('/index refresh with no index: prints error pointing to /index rebuild', async () => {
-    await processCommand('/index refresh', null, {
-      ...baseDeps,
-      vaultIndex: null,
-    });
+    const session = new CliSession({ ...baseDeps, vaultIndex: null });
+    await session.processCommand('/index refresh');
     expect(captured()).toContain('No index loaded');
   });
 
@@ -260,37 +212,30 @@ describe('/index commands', () => {
     Object.defineProperty(staleIndex, 'isStale', { value: async () => true });
 
     const out = makeOutput();
-    await processCommand('/generate npc name:Mira role:Spy', null, {
-      ...baseDeps,
-      model,
-      output: out.stream,
-      vaultIndex: staleIndex,
-    });
+    const session = new CliSession({ ...baseDeps, model, output: out.stream, vaultIndex: staleIndex });
+    await session.processCommand('/generate npc name:Mira role:Spy');
     expect(out.captured()).toContain('[warning] BM25 index is stale');
   });
 
   it('/generate with no index (null): output contains info message', async () => {
     const model = makeMockModel();
     const out = makeOutput();
-    await processCommand('/generate npc name:Mira role:Spy', null, {
-      ...baseDeps,
-      model,
-      output: out.stream,
-      vaultIndex: null,
-    });
+    const session = new CliSession({ ...baseDeps, model, output: out.stream, vaultIndex: null });
+    await session.processCommand('/generate npc name:Mira role:Spy');
     expect(out.captured()).toContain('[info] No keyword index');
   });
 
   it('/generate with embeddingProvider but no vaultEmbeddings: warns about missing embedding index', async () => {
     const model = makeMockModel();
     const out = makeOutput();
-    await processCommand('/generate npc name:Mira role:Spy', null, {
+    const session = new CliSession({
       ...baseDeps,
       model,
       output: out.stream,
       embeddingProvider: makeMockEmbeddingProvider(),
       vaultEmbeddings: null,
     });
+    await session.processCommand('/generate npc name:Mira role:Spy');
     expect(out.captured()).toContain('[info] No embedding index');
   });
 
@@ -302,23 +247,21 @@ describe('/index commands', () => {
     Object.defineProperty(staleEmb, 'isStale', { value: async () => true });
 
     const out = makeOutput();
-    await processCommand('/generate npc name:Mira role:Spy', null, {
+    const session = new CliSession({
       ...baseDeps,
       model,
       output: out.stream,
       embeddingProvider: provider,
       vaultEmbeddings: staleEmb,
     });
+    await session.processCommand('/generate npc name:Mira role:Spy');
     expect(out.captured()).toContain('[warning] Embedding index is stale');
   });
 
   it('/index rebuild with embeddingProvider: prints embedding index built message', async () => {
     const provider = makeMockEmbeddingProvider();
-    await processCommand('/index rebuild', null, {
-      ...baseDeps,
-      vaultIndex: null,
-      embeddingProvider: provider,
-    });
+    const session = new CliSession({ ...baseDeps, vaultIndex: null, embeddingProvider: provider });
+    await session.processCommand('/index rebuild');
     expect(captured()).toMatch(/BM25 index built: \d+ notes indexed/);
     expect(captured()).toMatch(/Embedding index built: \d+ notes embedded/);
   });
@@ -328,12 +271,13 @@ describe('/index commands', () => {
     const index = await VaultIndex.build(FIXTURE_VAULT);
     const embIndex = await VaultEmbeddings.build(FIXTURE_VAULT, provider);
 
-    await processCommand('/index status', null, {
+    const session = new CliSession({
       ...baseDeps,
       vaultIndex: index,
       vaultEmbeddings: embIndex,
       embeddingProvider: provider,
     });
+    await session.processCommand('/index status');
     expect(captured()).toContain('BM25 index:');
     expect(captured()).toContain('Embedding index:');
     expect(captured()).toContain('mock-v1');
@@ -344,12 +288,13 @@ describe('/index commands', () => {
     const index = await VaultIndex.build(FIXTURE_VAULT);
     const embIndex = await VaultEmbeddings.build(FIXTURE_VAULT, provider);
 
-    await processCommand('/index refresh', null, {
+    const session = new CliSession({
       ...baseDeps,
       vaultIndex: index,
       vaultEmbeddings: embIndex,
       embeddingProvider: provider,
     });
+    await session.processCommand('/index refresh');
     expect(captured()).toContain('BM25 index refreshed:');
     expect(captured()).toContain('Embedding index refreshed:');
   });

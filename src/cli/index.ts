@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { z } from 'zod';
 import type { LanguageModel } from 'ai';
 import { GenerationSession } from '../agent/generation-loop.js';
 import type { StreamCallbacks } from '../agent/generation-loop.js';
@@ -9,12 +10,7 @@ import { VaultIndex } from '../vault/vault-index.js';
 import { VaultEmbeddings } from '../vault/vault-embeddings.js';
 import { getEmbeddingProvider } from '../vault/embedding-provider.js';
 import type { EmbeddingProvider } from '../vault/embedding-provider.js';
-import {
-  initLogger,
-  setVerbose,
-  isVerbose,
-  getLogger,
-} from '../utils/logger.js';
+import { initLogger, setVerbose, isVerbose, getLogger } from '../utils/logger.js';
 
 /** Injected dependencies for testing (replaces env vars and real model). */
 export type CliDeps = {
@@ -29,38 +25,13 @@ export type CliDeps = {
   embeddingProvider?: EmbeddingProvider | null;
 };
 
+type ReasoningEventKind = 'start' | 'delta' | 'end';
+
+const EnvSchema = z.object({
+  VAULT_ROOT: z.string().default(''),
+});
+
 const DELIMITER = '─'.repeat(60);
-
-function writeReasoning(
-  out: NodeJS.WriteStream,
-  event: 'start' | 'delta' | 'end',
-  text?: string,
-): void {
-  if (event === 'start') out.write('\n[thinking]\n');
-  else if (event === 'delta' && text) out.write(text);
-  else if (event === 'end') out.write('\n[/thinking]\n');
-}
-
-function writeToolCall(
-  out: NodeJS.WriteStream,
-  toolName: string,
-  input: unknown,
-): void {
-  out.write(`\n[tool: ${toolName}] ${JSON.stringify(input)}\n`);
-}
-
-function buildCallbacks(out: NodeJS.WriteStream): StreamCallbacks {
-  const verbose = isVerbose();
-  return {
-    onText: (chunk) => out.write(chunk),
-    ...(verbose && {
-      onReasoningStart: () => writeReasoning(out, 'start'),
-      onReasoningDelta: (text) => writeReasoning(out, 'delta', text),
-      onReasoningEnd: () => writeReasoning(out, 'end'),
-      onToolCall: (name, input) => writeToolCall(out, name, input),
-    }),
-  };
-}
 
 /**
  * Parses the argument string after `/generate` into a type + key:value inputs map.
@@ -75,10 +46,10 @@ export function parseGenerateCommand(line: string): {
 } {
   const trimmed = line.trim();
   const tokens: string[] = [];
-  const re = /(\S+:"[^"]*"|\S+)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(trimmed)) !== null) {
-    tokens.push(m[1]);
+  const tokenPattern = /(\S+:"[^"]*"|\S+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = tokenPattern.exec(trimmed)) !== null) {
+    tokens.push(match[1]);
   }
 
   const [typeToken, ...rest] = tokens;
@@ -86,10 +57,10 @@ export function parseGenerateCommand(line: string): {
   const inputs: Record<string, string> = {};
 
   for (const token of rest) {
-    const colon = token.indexOf(':');
-    if (colon < 1) continue;
-    const key = token.slice(0, colon);
-    let value = token.slice(colon + 1);
+    const colonIndex = token.indexOf(':');
+    if (colonIndex < 1) continue;
+    const key = token.slice(0, colonIndex);
+    let value = token.slice(colonIndex + 1);
     if (value.startsWith('"') && value.endsWith('"')) {
       value = value.slice(1, -1);
     }
@@ -100,49 +71,78 @@ export function parseGenerateCommand(line: string): {
 }
 
 /**
- * Processes a single line of CLI input against the current session state.
- * Returns updated state. Pure enough to call directly in tests.
- *
- * @param line  - Raw input line from the GM (e.g. "/generate npc name:Mira").
- * @param state - Current session (null if no active session).
- * @param deps  - Injected dependencies; omit in production to use env/defaults.
- * @returns Updated `GenerationSession | null` after processing the command.
+ * Stateful CLI session. Holds vault context and the active GenerationSession.
+ * Call processCommand() for each line of REPL input.
  */
-export async function processCommand(
-  line: string,
-  state: GenerationSession | null,
-  deps?: CliDeps,
-): Promise<GenerationSession | null> {
-  const log = getLogger('cli');
-  const out = deps?.output ?? (process.stdout as NodeJS.WriteStream);
-  const write = (s: string) => out.write(s);
+export class CliSession {
+  private output: NodeJS.WriteStream;
+  private state: GenerationSession | null = null;
+  private vaultRoot: string;
+  private vaultIndex: VaultIndex | null | undefined;
+  private vaultEmbeddings: VaultEmbeddings | null | undefined;
+  private embeddingProvider: EmbeddingProvider | null | undefined;
+  private model: LanguageModel | undefined;
 
-  const trimmed = line.trim();
-  log.debug({ line: trimmed }, 'command received');
-
-  if (!trimmed.startsWith('/')) {
-    if (state === null) {
-      write(
-        'No active conversation. Use /generate <type> [key:value…] to start one.\n',
-      );
-      return null;
-    }
-    write(DELIMITER + '\n');
-    log.info({}, 'continuation started');
-    const result = await state.continue(trimmed, buildCallbacks(out));
-    write('\n' + DELIMITER + '\n');
-    write(
-      `Tokens: ${result.usage.inputTokens} in / ${result.usage.outputTokens} out / ${result.usage.totalTokens} total\n`,
-    );
-    return state;
+  constructor(deps: CliDeps = {}) {
+    const env = EnvSchema.parse(process.env);
+    this.output = deps.output ?? (process.stdout as NodeJS.WriteStream);
+    this.vaultRoot = deps.vaultRoot ?? env.VAULT_ROOT;
+    this.vaultIndex = deps.vaultIndex;
+    this.vaultEmbeddings = deps.vaultEmbeddings;
+    this.embeddingProvider = deps.embeddingProvider ?? null;
+    this.model = deps.model;
   }
 
-  const spaceIdx = trimmed.indexOf(' ');
-  const command = spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx);
-  const args = spaceIdx === -1 ? '' : trimmed.slice(spaceIdx + 1);
+  /** The active GenerationSession, or null if no session has been started. */
+  get currentState(): GenerationSession | null {
+    return this.state;
+  }
 
-  if (command === '/help') {
-    write(
+  private write(text: string): void {
+    this.output.write(text);
+  }
+
+  private writeReasoning(event: ReasoningEventKind, text?: string): void {
+    if (event === 'start') this.output.write('\n[thinking]\n');
+    else if (event === 'delta' && text) this.output.write(text);
+    else if (event === 'end') this.output.write('\n[/thinking]\n');
+  }
+
+  private writeToolCall(toolName: string, input: unknown): void {
+    this.output.write(`\n[tool: ${toolName}] ${JSON.stringify(input)}\n`);
+  }
+
+  private buildCallbacks(): StreamCallbacks {
+    const verbose = isVerbose();
+    return {
+      onText: (chunk) => this.output.write(chunk),
+      ...(verbose && {
+        onReasoningStart: () => this.writeReasoning('start'),
+        onReasoningDelta: (text) => this.writeReasoning('delta', text),
+        onReasoningEnd: () => this.writeReasoning('end'),
+        onToolCall: (name, input) => this.writeToolCall(name, input),
+      }),
+    };
+  }
+
+  private async handleContinuation(line: string): Promise<GenerationSession | null> {
+    if (this.state === null) {
+      this.write('No active conversation. Use /generate <type> [key:value…] to start one.\n');
+      return null;
+    }
+    const logger = getLogger('cli');
+    this.write(DELIMITER + '\n');
+    logger.info({}, 'continuation started');
+    const result = await this.state.continue(line, this.buildCallbacks());
+    this.write('\n' + DELIMITER + '\n');
+    this.write(
+      `Tokens: ${result.usage.inputTokens} in / ${result.usage.outputTokens} output / ${result.usage.totalTokens} total\n`,
+    );
+    return this.state;
+  }
+
+  private handleHelp(): void {
+    this.write(
       [
         'Commands:',
         '  /generate <type> [key:value…]  Generate new content',
@@ -156,166 +156,218 @@ export async function processCommand(
         '',
       ].join('\n'),
     );
-    return state;
   }
 
-  if (command === '/exit') {
-    log.info({}, 'session ended');
-    write('Goodbye!\n');
-    return state;
+  private handleExit(): void {
+    getLogger('cli').info({}, 'session ended');
+    this.write('Goodbye!\n');
   }
 
-  if (command === '/verbose') {
-    const arg = args.trim();
-    if (arg !== 'on' && arg !== 'off') {
-      write('Usage: /verbose on|off\n');
-      return state;
+  private handleVerbose(commandArgs: string): void {
+    const verboseArg = commandArgs.trim();
+    if (verboseArg !== 'on' && verboseArg !== 'off') {
+      this.write('Usage: /verbose on|off\n');
+      return;
     }
-    const enabled = arg === 'on';
+    const enabled = verboseArg === 'on';
     setVerbose(enabled);
-    write(`Verbose logging ${enabled ? 'enabled' : 'disabled'}.\n`);
-    log.info({ verbose: enabled }, 'verbose toggled');
-    return state;
+    this.write(`Verbose logging ${enabled ? 'enabled' : 'disabled'}.\n`);
+    getLogger('cli').info({ verbose: enabled }, 'verbose toggled');
   }
 
-  if (command === '/index') {
-    const vaultRoot = deps?.vaultRoot ?? process.env['VAULT_ROOT'] ?? '';
-    const subcommand = args.trim();
-    const vaultIndex = deps?.vaultIndex ?? null;
-    const vaultEmbeddings = deps?.vaultEmbeddings;
-    const embeddingProvider = deps?.embeddingProvider ?? null;
+  private async handleIndexRebuild(): Promise<void> {
+    const logger = getLogger('cli');
+    logger.info({}, 'rebuilding index');
+    const builtIndex = await VaultIndex.build(this.vaultRoot);
+    this.vaultIndex = builtIndex;
+    this.write(`BM25 index built: ${builtIndex.stats.noteCount} notes indexed.\n`);
+    if (this.embeddingProvider) {
+      const builtEmbeddings = await VaultEmbeddings.build(this.vaultRoot, this.embeddingProvider);
+      this.vaultEmbeddings = builtEmbeddings;
+      this.write(
+        `Embedding index built: ${builtEmbeddings.stats.noteCount} notes embedded (${this.embeddingProvider.modelId}).\n`,
+      );
+    }
+    logger.info({ noteCount: builtIndex.stats.noteCount }, 'index rebuilt');
+  }
 
+  private async handleIndexStatus(): Promise<void> {
+    const vaultIndex = this.vaultIndex;
+    if (!vaultIndex) {
+      this.write('No index loaded. Run /index rebuild first.\n');
+      return;
+    }
+    const stale = await vaultIndex.isStale(this.vaultRoot);
+    const timestamp = vaultIndex.stats.indexedAt.toISOString();
+    this.write(
+      `BM25 index: ${vaultIndex.stats.noteCount} notes, indexed at ${timestamp} — ${stale ? 'stale' : 'fresh'}.\n`,
+    );
+    const vaultEmbeddings = this.vaultEmbeddings;
+    if (vaultEmbeddings) {
+      const embStale = await vaultEmbeddings.isStale(
+        this.vaultRoot,
+        this.embeddingProvider ?? undefined,
+      );
+      const embTimestamp = vaultEmbeddings.stats.indexedAt.toISOString();
+      this.write(
+        `Embedding index: ${vaultEmbeddings.stats.noteCount} notes, model ${vaultEmbeddings.stats.modelId}, indexed at ${embTimestamp} — ${embStale ? 'stale' : 'fresh'}.\n`,
+      );
+    } else if (this.embeddingProvider) {
+      this.write('Embedding index: not built yet — run /index rebuild.\n');
+    }
+  }
+
+  private async handleIndexRefresh(): Promise<void> {
+    const vaultIndex = this.vaultIndex;
+    if (!vaultIndex) {
+      this.write('No index loaded. Run /index rebuild first.\n');
+      return;
+    }
+    const logger = getLogger('cli');
+    logger.info({}, 'refreshing index');
+    const counts = await vaultIndex.update(this.vaultRoot);
+    this.write(
+      `BM25 index refreshed: ${counts.added} added, ${counts.updated} updated, ${counts.removed} removed.\n`,
+    );
+    const vaultEmbeddings = this.vaultEmbeddings;
+    const embeddingProvider = this.embeddingProvider;
+    if (vaultEmbeddings && embeddingProvider) {
+      const embCounts = await vaultEmbeddings.update(this.vaultRoot, embeddingProvider);
+      this.write(
+        `Embedding index refreshed: ${embCounts.added} added, ${embCounts.updated} updated, ${embCounts.removed} removed.\n`,
+      );
+    }
+    logger.info(counts, 'index refreshed');
+  }
+
+  private async handleIndex(commandArgs: string): Promise<void> {
+    const subcommand = commandArgs.trim();
     if (subcommand === 'rebuild') {
-      // rebuild is handled in main() to update mutable references; this branch
-      // is reached only in tests via deps injection.
-      log.info({}, 'rebuilding index');
-      const built = await VaultIndex.build(vaultRoot);
-      write(`BM25 index built: ${built.stats.noteCount} notes indexed.\n`);
-      if (embeddingProvider) {
-        const builtEmb = await VaultEmbeddings.build(vaultRoot, embeddingProvider);
-        write(`Embedding index built: ${builtEmb.stats.noteCount} notes embedded (${embeddingProvider.modelId}).\n`);
-      }
-      log.info({ noteCount: built.stats.noteCount }, 'index rebuilt');
-      return state;
+      await this.handleIndexRebuild();
+      return;
     }
-
-    if (vaultIndex === null) {
-      write('No index loaded. Run /index rebuild first.\n');
-      return state;
-    }
-
     if (subcommand === 'status') {
-      const stale = await vaultIndex.isStale(vaultRoot);
-      const ts = vaultIndex.stats.indexedAt.toISOString();
-      write(
-        `BM25 index: ${vaultIndex.stats.noteCount} notes, indexed at ${ts} — ${stale ? 'stale' : 'fresh'}.\n`,
-      );
-      if (vaultEmbeddings) {
-        const embStale = await vaultEmbeddings.isStale(vaultRoot, embeddingProvider ?? undefined);
-        const embTs = vaultEmbeddings.stats.indexedAt.toISOString();
-        write(
-          `Embedding index: ${vaultEmbeddings.stats.noteCount} notes, model ${vaultEmbeddings.stats.modelId}, indexed at ${embTs} — ${embStale ? 'stale' : 'fresh'}.\n`,
-        );
-      } else if (embeddingProvider) {
-        write(`Embedding index: not built yet — run /index rebuild.\n`);
-      }
-      return state;
+      await this.handleIndexStatus();
+      return;
     }
-
     if (subcommand === 'refresh') {
-      log.info({}, 'refreshing index');
-      const counts = await vaultIndex.update(vaultRoot);
-      write(
-        `BM25 index refreshed: ${counts.added} added, ${counts.updated} updated, ${counts.removed} removed.\n`,
-      );
-      if (vaultEmbeddings && embeddingProvider) {
-        const embCounts = await vaultEmbeddings.update(vaultRoot, embeddingProvider);
-        write(
-          `Embedding index refreshed: ${embCounts.added} added, ${embCounts.updated} updated, ${embCounts.removed} removed.\n`,
-        );
-      }
-      log.info(counts, 'index refreshed');
-      return state;
+      await this.handleIndexRefresh();
+      return;
     }
-
-    write('Usage: /index status | refresh | rebuild\n');
-    return state;
+    this.write('Usage: /index status | refresh | rebuild\n');
   }
 
-  if (command === '/generate') {
-    const { type, inputs } = parseGenerateCommand(args);
-    const vaultRoot = deps?.vaultRoot ?? process.env['VAULT_ROOT'] ?? '';
-    const templatePath = path.join(vaultRoot, '_templates', `${type}.md`);
-    // Preserve null (no index built) vs undefined (deps not provided)
-    const rawVaultIndex = deps?.vaultIndex;
-    const vaultIndex = rawVaultIndex ?? undefined;
-    const rawVaultEmbeddings = deps?.vaultEmbeddings;
-    const vaultEmbeddings = rawVaultEmbeddings ?? undefined;
-    const embeddingProvider = deps?.embeddingProvider ?? undefined;
-
+  private async warnIfStaleIndexes(): Promise<void> {
+    const vaultIndex = this.vaultIndex;
     if (vaultIndex) {
-      const stale = await vaultIndex.isStale(vaultRoot);
-      if (stale) {
-        write(
+      const stale = await vaultIndex.isStale(this.vaultRoot);
+      if (stale)
+        this.write(
           '[warning] BM25 index is stale — run /index refresh to include recent vault changes.\n',
         );
-      }
-    } else if (rawVaultIndex === null) {
-      write(
-        '[info] No keyword index — run /index rebuild to enable keyword search.\n',
-      );
+    } else if (this.vaultIndex === null) {
+      this.write('[info] No keyword index — run /index rebuild to enable keyword search.\n');
     }
-
+    const embeddingProvider = this.embeddingProvider;
     if (embeddingProvider) {
+      const vaultEmbeddings = this.vaultEmbeddings;
       if (!vaultEmbeddings) {
-        write(
-          '[info] No embedding index — run /index rebuild to enable semantic search.\n',
-        );
+        this.write('[info] No embedding index — run /index rebuild to enable semantic search.\n');
       } else {
-        const embStale = await vaultEmbeddings.isStale(vaultRoot, embeddingProvider);
-        if (embStale) {
-          write(
+        const embStale = await vaultEmbeddings.isStale(this.vaultRoot, embeddingProvider);
+        if (embStale)
+          this.write(
             '[warning] Embedding index is stale — run /index refresh to include recent vault changes.\n',
           );
-        }
       }
     }
+  }
 
-    log.info({ type, inputKeys: Object.keys(inputs) }, 'generation started');
+  private async executeGenerate(
+    type: string,
+    inputs: Record<string, string>,
+  ): Promise<GenerationSession> {
+    const templatePath = path.join(this.vaultRoot, '_templates', `${type}.md`);
+    const session = await GenerationSession.create({
+      vaultRoot: this.vaultRoot,
+      templatePath,
+      inputs,
+      model: this.model,
+      vaultIndex: this.vaultIndex ?? undefined,
+      vaultEmbeddings: this.vaultEmbeddings ?? undefined,
+      embeddingProvider: this.embeddingProvider ?? undefined,
+    });
+    this.write(DELIMITER + '\n');
+    const result = await session.generate(this.buildCallbacks());
+    this.write('\n' + DELIMITER + '\n');
+    this.write(
+      `Tokens: ${result.usage.inputTokens} in / ${result.usage.outputTokens} output / ${result.usage.totalTokens} total\n`,
+    );
+    getLogger('cli').info(
+      { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens },
+      'generation finished',
+    );
+    return session;
+  }
+
+  private async handleGenerate(commandArgs: string): Promise<GenerationSession | null> {
+    const logger = getLogger('cli');
+    const { type, inputs } = parseGenerateCommand(commandArgs);
+    logger.info({ type, inputKeys: Object.keys(inputs) }, 'generation started');
+    await this.warnIfStaleIndexes();
     try {
-      const session = await GenerationSession.create({
-        vaultRoot,
-        templatePath,
-        inputs,
-        model: deps?.model,
-        vaultIndex,
-        vaultEmbeddings,
-        embeddingProvider,
-      });
-      write(DELIMITER + '\n');
-      const result = await session.generate(buildCallbacks(out));
-      write('\n' + DELIMITER + '\n');
-      write(
-        `Tokens: ${result.usage.inputTokens} in / ${result.usage.outputTokens} out / ${result.usage.totalTokens} total\n`,
-      );
-      log.info(
-        {
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-        },
-        'generation finished',
-      );
-      return session;
+      return await this.executeGenerate(type, inputs);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      log.error({ err: msg, type }, 'generation failed');
-      write(`Error: ${msg}\n`);
+      if (error instanceof Error) {
+        logger.error({ err: error.message, type }, 'generation failed');
+        this.write(`Error: ${error.message}\n`);
+      } else {
+        this.write(`Error: ${String(error)}\n`);
+      }
       return null;
     }
   }
 
-  write(`Unknown command: ${command}. Type /help for available commands.\n`);
-  return state;
+  /**
+   * Processes a single line of REPL input, updating session state as needed.
+   *
+   * @param line - Raw input line from the GM (e.g. "/generate npc name:Mira").
+   * @returns The active `GenerationSession`, or null if none is running.
+   */
+  async processCommand(line: string): Promise<GenerationSession | null> {
+    const logger = getLogger('cli');
+    const trimmed = line.trim();
+    logger.debug({ line: trimmed }, 'command received');
+    if (!trimmed.startsWith('/')) {
+      this.state = await this.handleContinuation(trimmed);
+      return this.state;
+    }
+    const spaceIndex = trimmed.indexOf(' ');
+    const command = spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex);
+    const commandArgs = spaceIndex === -1 ? '' : trimmed.slice(spaceIndex + 1);
+    if (command === '/help') {
+      this.handleHelp();
+      return this.state;
+    }
+    if (command === '/exit') {
+      this.handleExit();
+      return this.state;
+    }
+    if (command === '/verbose') {
+      this.handleVerbose(commandArgs);
+      return this.state;
+    }
+    if (command === '/index') {
+      await this.handleIndex(commandArgs);
+      return this.state;
+    }
+    if (command === '/generate') {
+      this.state = await this.handleGenerate(commandArgs);
+      return this.state;
+    }
+    this.write(`Unknown command: ${command}. Type /help for available commands.\n`);
+    return this.state;
+  }
 }
 
 /**
@@ -325,87 +377,51 @@ export async function processCommand(
 export async function main(): Promise<void> {
   const verbose = process.argv.includes('--verbose');
   initLogger({ verbose });
-  const log = getLogger('cli');
+  const logger = getLogger('cli');
 
-  const vaultRoot = process.env['VAULT_ROOT'] ?? '';
-  let vaultIndex: VaultIndex | null = await VaultIndex.load(vaultRoot);
-  if (vaultIndex) {
-    log.info({ noteCount: vaultIndex.stats.noteCount }, 'keyword index loaded');
-  }
+  const env = EnvSchema.parse(process.env);
+  const vaultRoot = env.VAULT_ROOT;
+  const vaultIndex: VaultIndex | null = await VaultIndex.load(vaultRoot);
+  if (vaultIndex) logger.info({ noteCount: vaultIndex.stats.noteCount }, 'keyword index loaded');
 
   const embeddingProvider: EmbeddingProvider | null = getEmbeddingProvider();
-  let vaultEmbeddings: VaultEmbeddings | null = embeddingProvider
+  const vaultEmbeddings: VaultEmbeddings | null = embeddingProvider
     ? await VaultEmbeddings.load(vaultRoot)
     : null;
   if (vaultEmbeddings) {
-    log.info(
+    logger.info(
       { noteCount: vaultEmbeddings.stats.noteCount, modelId: vaultEmbeddings.stats.modelId },
       'embedding index loaded',
     );
   }
 
-  const rl = createInterface({
+  const session = new CliSession({ vaultRoot, vaultIndex, vaultEmbeddings, embeddingProvider });
+  const readlineInterface = createInterface({
     input: process.stdin,
     output: process.stdout,
     prompt: '> ',
   });
-  let state: GenerationSession | null = null;
 
-  rl.prompt();
+  readlineInterface.prompt();
 
-  rl.on('line', async (line) => {
-    rl.pause();
-
-    // /index rebuild is handled here so it can update the mutable vaultIndex
-    // and vaultEmbeddings references.
-    if (line.trim().startsWith('/index rebuild')) {
-      try {
-        vaultIndex = await VaultIndex.build(vaultRoot);
-        process.stdout.write(
-          `BM25 index built: ${vaultIndex.stats.noteCount} notes indexed.\n`,
-        );
-        log.info({ noteCount: vaultIndex.stats.noteCount }, 'index rebuilt');
-
-        if (embeddingProvider) {
-          vaultEmbeddings = await VaultEmbeddings.build(vaultRoot, embeddingProvider);
-          process.stdout.write(
-            `Embedding index built: ${vaultEmbeddings.stats.noteCount} notes embedded (${embeddingProvider.modelId}).\n`,
-          );
-          log.info(
-            { noteCount: vaultEmbeddings.stats.noteCount, modelId: embeddingProvider.modelId },
-            'embedding index rebuilt',
-          );
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        process.stdout.write(`Error: ${msg}\n`);
-      }
-      rl.resume();
-      rl.prompt();
-      return;
-    }
-
-    state = await processCommand(line, state, {
-      vaultRoot,
-      vaultIndex,
-      vaultEmbeddings,
-      embeddingProvider,
-    });
+  readlineInterface.on('line', async (line) => {
+    readlineInterface.pause();
+    await session.processCommand(line);
     if (line.trim() === '/exit') {
-      rl.close();
+      readlineInterface.close();
       return;
     }
-    rl.resume();
-    rl.prompt();
+    readlineInterface.prompt();
+    readlineInterface.resume();
   });
 
-  await new Promise<void>((resolve) => rl.on('close', resolve));
+  await new Promise<void>((resolve) => readlineInterface.on('close', resolve));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  main().catch((err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`Fatal: ${msg}\n`);
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`Fatal: ${message}\n`);
     process.exit(1);
   });
 }
