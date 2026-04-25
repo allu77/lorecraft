@@ -6,16 +6,5 @@ paths:
 
 # TypeScript rules
 
-- No `any` — use `unknown` and narrow, or define a proper type
-- Prefer `type` over `interface` for data shapes; use `interface`
-  only for extension contracts
-- File naming: kebab-case (e.g. vault-reader.ts, prompt-builder.ts)
-- Exports: named exports only — no default exports except Next.js
-  page and layout components
-- Async: always async/await, never raw Promise chains
-- Error handling: always type-narrow errors
-  (if (error instanceof Error))
-- Zod for all external/untrusted input validation: LLM tool call
-  inputs, template frontmatter, env vars
-- Always include JSDoc for exported functions. Include intent, params,
-  return values. Skip trivial internal helpers.
+@docs/development/typescript-rules.md
+@docs/development/typescript-style-guide.md

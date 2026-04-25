@@ -64,6 +64,13 @@ pnpm test:watch   # vitest
 - LLM provider swappable via single .env change — no provider-specific
   types outside src/llm/provider.ts
 
+## Feature development
+
+When planning for new major features or package versions, follow a spec 
+driven design approach. Referto `.claude/skills/spec/SKILL.md`. 
+You can skip this for fixes and minor feature development. If in doubt, ask
+the user.
+
 ## Monorepo note
 
 Currently a single pnpm package. pnpm-workspace.yaml is already present
