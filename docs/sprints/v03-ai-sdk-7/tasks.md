@@ -42,7 +42,7 @@
   `src/__tests__/agent-vault.integration.test.ts`)
   - Apply the decision from task 002 (design Decision 3); change nothing if V3 still works
   - Do not skip, disable or loosen any test
-- [ ] 004 — Adapt the generation loop to the v7 API (`src/agent/generation-loop.ts`)
+- [x] 004 — Adapt the generation loop to the v7 API (`src/agent/generation-loop.ts`)
   - `stepCountIs` → `isStepCount`
   - `streamResult.fullStream` → `streamResult.stream` (generate and reply paths)
   - `await streamResult.totalUsage` → `await streamResult.usage` (Decision 1)

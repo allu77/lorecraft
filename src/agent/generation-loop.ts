@@ -1,5 +1,5 @@
 import path from 'path';
-import { ToolLoopAgent, stepCountIs } from 'ai';
+import { ToolLoopAgent, isStepCount } from 'ai';
 import type { ModelMessage, LanguageModel, ToolSet } from 'ai';
 import { VaultReader } from '../vault/vault-reader.js';
 import { TemplateParser } from '../vault/template-parser.js';
@@ -235,7 +235,7 @@ export class GenerationSession {
       model,
       instructions: system,
       tools,
-      stopWhen: stepCountIs(options.maxToolSteps ?? 10),
+      stopWhen: isStepCount(options.maxToolSteps ?? 10),
     });
 
     return new GenerationSession(agent, prompt);
@@ -257,7 +257,7 @@ export class GenerationSession {
       prompt: this.initialPrompt,
     });
     const chunks: string[] = [];
-    for await (const part of streamResult.fullStream) {
+    for await (const part of streamResult.stream) {
       switch (part.type) {
         case 'text-delta':
           chunks.push(part.text);
@@ -279,8 +279,8 @@ export class GenerationSession {
     }
 
     const content = chunks.join('');
-    const usage = await streamResult.totalUsage;
-    const response = await streamResult.response;
+    const usage = await streamResult.usage;
+    const responseMessages = await streamResult.responseMessages;
     log.debug({ content }, 'response received');
     log.info(
       { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
@@ -289,7 +289,7 @@ export class GenerationSession {
 
     this.messages = [
       { role: 'user', content: this.initialPrompt },
-      ...response.messages,
+      ...responseMessages,
     ];
 
     return {
@@ -322,7 +322,7 @@ export class GenerationSession {
 
     const streamResult = await this.agent.stream({ messages: this.messages });
     const chunks: string[] = [];
-    for await (const part of streamResult.fullStream) {
+    for await (const part of streamResult.stream) {
       switch (part.type) {
         case 'text-delta':
           chunks.push(part.text);
@@ -344,15 +344,15 @@ export class GenerationSession {
     }
 
     const content = chunks.join('');
-    const usage = await streamResult.totalUsage;
-    const response = await streamResult.response;
+    const usage = await streamResult.usage;
+    const responseMessages = await streamResult.responseMessages;
     log.debug({ content }, 'response received');
     log.info(
       { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
       'continuation stream ended',
     );
 
-    this.messages.push(...response.messages);
+    this.messages.push(...responseMessages);
 
     return {
       content,
