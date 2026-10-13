@@ -108,5 +108,5 @@
 - [ ] NNN — Description (discovered: YYYY-MM-DD)
 -->
 
-- [ ] 017 — Fix `tools.test.ts` type errors: v7 `ToolExecutionOptions` requires `context`; 4 call sites pass `{ messages, toolCallId }` (`src/agent/tools.test.ts`) (discovered: 2026-10-13)
+- [x] 017 — Fix `tools.test.ts` type errors: v7 `ToolExecutionOptions` requires `context`; 4 call sites pass `{ messages, toolCallId }` (`src/agent/tools.test.ts`) (discovered: 2026-10-13)
 - [ ] 018 — Review and update the prompt snapshot in `generation-loop.integration.test.ts`: v7 adds `headers: { user-agent: 'ai-sdk-agent/tool-loop' }`, `reasoning: undefined`, and drops `providerOptions` on the tool entry; prompt content is unchanged (discovered: 2026-10-13)
