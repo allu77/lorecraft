@@ -50,9 +50,13 @@
   - Review `tools.ts` and `ToolLoopAgent` options against the v7 guide; record non-changes in the commit message
 - [ ] 005 — Add `getEmbeddingModel(modelId)` (`src/llm/provider.ts`)
   - Returns `bedrock.embeddingModel(modelId)` typed as the SDK's `EmbeddingModel`
-- [ ] 006 — Route embeddings through the provider boundary (`src/vault/embedding-provider.ts`)
-  - Remove the `@ai-sdk/amazon-bedrock` import; call `getEmbeddingModel` from `../llm/provider.js` in `embed` and `embedMany`
-  - `EmbeddingProvider`, `getEmbeddingProvider()`, env vars and error messages unchanged
+- [ ] 006 — Move the Bedrock embedding implementation into `src/llm/`
+  (`src/llm/embedding-provider.ts`, `src/vault/embedding-provider.ts`,
+  `src/cli/index.ts`, `src/cli/inspect.ts`)
+  - Move `BedrockEmbeddingProvider` and `getEmbeddingProvider()` to `src/llm/embedding-provider.ts`; call `getEmbeddingModel` from `./provider.js`; no import from `src/vault/` (structural typing)
+  - `src/vault/embedding-provider.ts` keeps only the `EmbeddingProvider` interface
+  - Point `cli/index.ts` and `cli/inspect.ts` at the new location of `getEmbeddingProvider`
+  - Behaviour, env vars and error messages unchanged (design Decision 4)
 
 ### Tests
 
@@ -63,9 +67,9 @@
   - Confirm the history test fails against the old `response.messages` code, if feasible
 - [ ] 008 — [test] `getEmbeddingModel` unit test for task 005 (`src/llm/provider.test.ts`)
   - `getEmbeddingModel('x')` returns a model with `modelId` `'x'`; no network
-- [ ] 009 — [test] Update embedding provider tests for task 006
-  (`src/vault/embedding-provider.test.ts`)
-  - Replace the Bedrock package mock with a mock of `../llm/provider.js`; keep all existing cases
+- [ ] 009 — [test] Move and update embedding provider tests for task 006
+  (`src/llm/embedding-provider.test.ts`, from `src/vault/embedding-provider.test.ts`)
+  - Replace the Bedrock package mock with a mock of `./provider.js`; keep all existing cases
   - Add a case asserting `getEmbeddingModel` is called with `EMBEDDING_MODEL_ID` when set
 
 ### Integration
@@ -85,7 +89,7 @@
 - [ ] 013 — Document the Node 22+ requirement (`docs/development/setup.md`)
 - [ ] 014 — Amend ADRs (`docs/architecture/decisions.md`)
   - ADR-001: replace "(latest)" with pinned `~` ranges; upgrades happen as explicit sprints
-  - ADR-004: note that the Bedrock adapter is reached only via `src/llm/provider.ts`
+  - ADR-004: the `EmbeddingProvider` interface lives in `src/vault/`; the Bedrock implementation lives in `src/llm/` and reaches the adapter only via `src/llm/provider.ts`
 - [ ] 015 — Fixture vault: no change expected; confirm and tick
   (`src/__tests__/fixtures/test-vault/`)
 - [ ] 016 — Update `docs/sprints/overview.md` to mark sprint complete

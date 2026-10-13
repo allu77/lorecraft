@@ -27,10 +27,14 @@ docs/development/setup.md                 (mod) Node 22+ requirement
 docs/architecture/decisions.md            (mod) ADR-001 "latest" -> pinned ~ range; ADR-004 note on boundary
 src/
 ├── llm/
-│   └── provider.ts                       (mod) adds getEmbeddingModel(); only file importing the Bedrock adapter
+│   ├── provider.ts                       (mod) adds getEmbeddingModel(); only file importing the Bedrock adapter
+│   ├── embedding-provider.ts             (new) BedrockEmbeddingProvider + getEmbeddingProvider(), moved from vault/
+│   └── embedding-provider.test.ts        (moved from vault/) mocks ./provider.js instead of the Bedrock package
 ├── vault/
-│   ├── embedding-provider.ts             (mod) drops Bedrock import, calls getEmbeddingModel()
-│   └── embedding-provider.test.ts        (mod) mocks ../llm/provider.js instead of the Bedrock package
+│   └── embedding-provider.ts             (mod) keeps only the EmbeddingProvider interface (no SDK imports)
+├── cli/
+│   ├── index.ts                          (mod) imports getEmbeddingProvider from ../llm/embedding-provider.js
+│   └── inspect.ts                        (mod) same
 ├── agent/
 │   └── generation-loop.ts                (mod) isStepCount, stream, usage, responseMessages
 └── __tests__/
@@ -59,9 +63,18 @@ export function getModel(): LanguageModel;                        // unchanged
 export function getEmbeddingModel(modelId: string): EmbeddingModel;
 ```
 
-`EmbeddingProvider` (the interface in `src/vault/embedding-provider.ts`),
-`BedrockEmbeddingProvider`, and `getEmbeddingProvider()` keep their current public
-signatures. `GenerateResult`, `TokenUsage` and `StreamCallbacks` in
+```typescript
+// src/vault/embedding-provider.ts: interface only, unchanged
+export interface EmbeddingProvider { embed; embedMany; dimensions; modelId }
+
+// src/llm/embedding-provider.ts: moved, signatures unchanged. Does not import
+// from src/vault/; it satisfies EmbeddingProvider structurally.
+export class BedrockEmbeddingProvider { /* same members as the interface */ }
+export function getEmbeddingProvider(): BedrockEmbeddingProvider | null;
+```
+
+All existing `import type { EmbeddingProvider } from '../vault/embedding-provider.js'`
+lines stay valid. Only the two callers of `getEmbeddingProvider()` change their import. `GenerateResult`, `TokenUsage` and `StreamCallbacks` in
 `generation-loop.ts` are unchanged. No other sprint's contract changes.
 
 ---
@@ -79,9 +92,9 @@ Behaviour for the GM is unchanged. Internally, in `GenerationSession`:
 4. The conversation history is extended with `await streamResult.responseMessages`
    (was `(await streamResult.response).messages`). See decision 2.
 
-Embeddings: `BedrockEmbeddingProvider.embed/embedMany` call
-`embed({ model: getEmbeddingModel(this.modelId), ... })`, with `getEmbeddingModel`
-imported from `../llm/provider.js`.
+Embeddings: `BedrockEmbeddingProvider.embed/embedMany` (now in
+`src/llm/embedding-provider.ts`) call `embed({ model: getEmbeddingModel(this.modelId), ... })`,
+with `getEmbeddingModel` imported from `./provider.js`.
 
 ---
 
@@ -122,19 +135,26 @@ mock (loses the SDK-maintained fixture, contradicts ADR-006).
 a spike to decide this before editing the three files.
 > **ADR candidate:** No
 
-### Decision 4: Provider boundary for embeddings is a function returning the SDK type
-**Chosen:** `getEmbeddingModel(modelId): EmbeddingModel` in `src/llm/provider.ts`.
-**Alternatives considered:** move the whole `EmbeddingProvider` implementation into
-`src/llm/` (bigger move, changes ADR-004 wording, touches `vault/` imports and tests
-for no benefit); pass the model into `BedrockEmbeddingProvider` via its constructor
-(pushes the import to callers such as `cli/index.ts` and `inspect.ts`).
-**Rationale:** Smallest change that makes `grep` for the Bedrock package match only
-`provider.ts`. `src/vault/` importing from `src/llm/` is allowed by ADR-002 (only
-imports from `agent/` and `cli/` are forbidden). `EmbeddingProvider`,
-`getEmbeddingProvider()` and env handling stay as ADR-004 describes, so no ADR-004
-change is needed beyond a one-line note.
-> **ADR candidate:** Yes. Amend ADR-004 with a line stating that the Bedrock
-> adapter is reached only via `src/llm/provider.ts`.
+### Decision 4: Move the Bedrock embedding implementation into `src/llm/`
+**Chosen:** `getEmbeddingModel(modelId): EmbeddingModel` in `src/llm/provider.ts` is the
+only Bedrock-adapter import. `BedrockEmbeddingProvider` and `getEmbeddingProvider()`
+move to `src/llm/embedding-provider.ts`. `src/vault/embedding-provider.ts` keeps only
+the `EmbeddingProvider` interface, which the llm class satisfies structurally, so
+neither module imports the other. `cli/` imports the factory from `llm/`.
+**Alternatives considered:**
+- *`vault/` imports `getEmbeddingModel` from `llm/`* (the first draft of this design):
+  rejected, `.claude/rules/architecture.md` says `src/vault/` has zero dependencies
+  on `src/llm/`. This was caught during implementation, and ADR-002 alone did not
+  show it.
+- *Inject the model into the constructor from callers:* keeps a Bedrock-specific class
+  in `vault/` and pushes wiring to every caller.
+- *Leave as is:* keeps the invariant violated.
+**Rationale:** Satisfies both rules (adapter only in `provider.ts`; `vault/` has no
+`llm/` dependency) and keeps the churn small, since type imports of `EmbeddingProvider`
+are untouched. `src/llm/embedding-provider.ts` uses `getLogger` from `src/utils/`,
+which the architecture rules do not list as a module; this is assumed to be allowed.
+> **ADR candidate:** Yes. Amend ADR-004: the `EmbeddingProvider` interface lives in
+> `src/vault/embedding-provider.ts`; the Bedrock implementation lives in `src/llm/`.
 
 ### Decision 5: Use manual edits rather than `npx @ai-sdk/codemod v7`
 **Chosen:** Apply the three edits by hand, using the codemod only as a dry-run
@@ -165,9 +185,9 @@ Follows ADR-006 (Vitest; SDK mock models; fixture vault).
 - **Existing suites must pass:** `embedding-provider.test.ts`,
   `generation-loop.integration.test.ts`, `cli.integration.test.ts`,
   `agent-vault.integration.test.ts`, `tools.test.ts`.
-- **`embedding-provider.test.ts`:** replace the Bedrock package mock with a mock of
-  `../llm/provider.js` exposing `getEmbeddingModel`; same cases, plus one asserting
-  it is called with `EMBEDDING_MODEL_ID` when set.
+- **`src/llm/embedding-provider.test.ts`** (moved from `src/vault/`): replace the
+  Bedrock package mock with a mock of `./provider.js` exposing `getEmbeddingModel`;
+  same cases, plus one asserting it is called with `EMBEDDING_MODEL_ID` when set.
 - **New in `generation-loop.integration.test.ts`:**
   1. *Multi-step usage:* a mock model that makes a tool call on step 1 and answers on
      step 2, each reporting different usage; assert `GenerateResult.usage` equals the
@@ -177,8 +197,9 @@ Follows ADR-006 (Vitest; SDK mock models; fixture vault).
      (Decision 2).
 - **`provider.ts`:** a small unit test that `getEmbeddingModel('x')` returns a model
   whose `modelId` is `x` (no network).
-- **Boundary check:** a test (or a documented grep in CI) that the Bedrock package is
-  imported only from `src/llm/provider.ts`.
+- **Boundary check:** a test that the Bedrock package is imported only from
+  `src/llm/provider.ts`, and that `src/vault/` and `src/llm/` import nothing from
+  each other, `agent/` or `cli/` (per `.claude/rules/architecture.md`).
 - **Manual smoke (when AWS creds exist):** `pnpm cli` generation with a tool call
   and a semantic search; compare usage and cost output against the pre-upgrade run.
 - No fixture vault changes. No snapshot tests.
@@ -203,6 +224,7 @@ Follows ADR-006 (Vitest; SDK mock models; fixture vault).
 |---|---|---|
 | Does `pnpm cli` (tsx) load ESM-only `ai@7` and the 5.x provider? | Yes: Node 22.22 supports `require(esm)` and tsx handles ESM; verified in the first task | Task 1 spike |
 | Do `MockLanguageModelV3` instances work with `ai@7`? | Probably yes via compatibility wrapping; if not, move to V4 | Task 1 spike (Decision 3) |
+| Does `src/llm/` using `getLogger` from `src/utils/` break the llm "zero dependencies" rule? | No: `utils/` is not a listed module | Task 006; confirm with maintainer |
 | Is `streamResult.responseMessages` available on the object `ToolLoopAgent.stream()` returns? | It is typed as a `StreamTextResult` member, so yes; confirmed by typecheck | Task 2 |
 | Which exact 7.0.x and 5.0.x patch versions to pin? | Newest at implementation time (7.0.138 / 5.0.114 today) | Task 1 |
 | Does `@ai-sdk/amazon-bedrock@5` change the `bedrock.embeddingModel()` API name? | No: the code already uses `embeddingModel`; confirmed by typecheck | Task 1 |

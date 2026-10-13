@@ -89,11 +89,13 @@ requires **so that** nobody runs it on an unsupported Node version.
 outside `src/llm/provider.ts`" holds.
 
 1. `src/vault/embedding-provider.ts` no longer imports `@ai-sdk/amazon-bedrock`; the
-   Bedrock embedding model is obtained from `src/llm/provider.ts`.
+   Bedrock implementation lives in `src/llm/embedding-provider.ts` and obtains the
+   model from `src/llm/provider.ts`.
 2. `grep -r "@ai-sdk/amazon-bedrock" src` matches only `src/llm/provider.ts` (and
    test mocks of it).
 3. `EMBEDDING_PROVIDER=bedrock` behaviour, defaults and error messages are unchanged.
-4. The `vault/` module does not gain an import from `agent/` or `cli/` (ADR-002).
+4. Module rules in `.claude/rules/architecture.md` hold: `src/vault/` has no imports from
+   `agent/`, `llm/` or `cli/`, and `src/llm/` has none from `vault/`, `agent/` or `cli/`.
 5. Embedding-provider unit tests are updated to mock the new boundary and still cover
    the same cases.
 
