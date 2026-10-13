@@ -80,9 +80,10 @@
 - [x] 011 — Sweep for removed or renamed v7 identifiers
   - `grep` `src/` for `stepCountIs`, `fullStream`, `totalUsage`, `cachedInputTokens`, `reasoningTokens`, `ToolCallOptions`, `experimental_`, `onFinish`, `onStepFinish`; fix or justify each hit
   - Optionally cross-check with `npx @ai-sdk/codemod v7` as a dry run, and do not apply its changes wholesale
-- [ ] 012 — Full verification and manual smoke test
+- [x] 012 — Full verification and manual smoke test
   - `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all green
   - `pnpm cli` starts; with AWS credentials: run a generation that uses a tool and a semantic search, and compare usage and cost output with the pre-upgrade run; without credentials, say so in the commit message
+  - Result: automated checks green and CLI starts; **live Bedrock smoke run NOT performed** (only sandbox AWS credentials available). To do manually: `pnpm cli`, run a generation with a tool call and a semantic search, compare usage/cost with SDK 6
 
 ### Documentation and wrap-up
 
