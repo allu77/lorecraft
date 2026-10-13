@@ -30,6 +30,11 @@ AWS_REGION=us-east-1
 AWS_PROFILE=default
 ```
 
+Set `MODEL_ID` to choose the generation model (a Bedrock model or inference-profile ID
+enabled for your account). If unset it defaults to
+`us.anthropic.claude-haiku-4-5-20251001-v1:0`. Embeddings use `EMBEDDING_MODEL_ID`
+(default `amazon.titan-embed-text-v2:0`) when `EMBEDDING_PROVIDER=bedrock`.
+
 ### Anthropic direct
 ```
 LLM_PROVIDER=anthropic
