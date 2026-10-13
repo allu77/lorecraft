@@ -10,7 +10,11 @@
   and one env var. *Amended 2026-10-13 (v03-ai-sdk-7):* `ai`,
   `@ai-sdk/amazon-bedrock` and `zod` are pinned with `~` ranges (currently
   `ai` 7.0.x, Bedrock provider 5.0.x) instead of `latest`; major upgrades happen
-  as explicit sprints. Node.js 22+ is required.
+  as explicit sprints. Node.js 22+ is required. *Amended 2026-10-13
+  (v02-sprint-ollama):* `LLM_PROVIDER` selects Amazon Bedrock (default) or Ollama
+  (`ollama-ai-provider-v2`); both adapters are imported only in `src/llm/provider.ts`
+  and the Ollama context window (`OLLAMA_NUM_CTX`) is injected there as `num_ctx`
+  through a language-model middleware.
 - **Consequences:** Not tied to AWS-specific deployment. Strands Agents SDK
   may be revisited at v0.3 (multi-agent) once its TypeScript SDK stabilises.
   Patch updates need a periodic bump; the lockfile and the test suite gate them.
@@ -44,7 +48,7 @@
 
 ---
 
-## ADR-004: Amazon Bedrock embeddings for semantic search (v0.2)
+## ADR-004: Embeddings for semantic search: Amazon Bedrock or Ollama (v0.2)
 - **Date:** 2026-04-18
 - **Status:** Accepted
 - **Context:** Semantic search requires an embedding model. The project already
@@ -58,7 +62,13 @@
   (v03-ai-sdk-7):* the Bedrock implementation (`BedrockEmbeddingProvider`,
   `getEmbeddingProvider()`) lives in `src/llm/embedding-provider.ts` and reaches the
   adapter only through `getEmbeddingModel()` in `src/llm/provider.ts`, so
-  `src/vault/` has no dependency on `src/llm/`.
+  `src/vault/` has no dependency on `src/llm/`. *Amended 2026-10-13
+  (v02-sprint-ollama):* `EMBEDDING_PROVIDER=ollama` is also supported
+  (`OllamaEmbeddingProvider`, default `nomic-embed-text`, 768 dimensions), so the
+  original "no local Ollama dependency" rationale no longer holds: a GM can run
+  fully local. Output dimensions come from a known-model table with an
+  `EMBEDDING_DIMENSIONS` override. Changing provider or model changes the stored
+  `modelId`, which marks the embedding index stale and forces a rebuild.
 - **Consequences:** AWS credentials required (already assumed for LLM). Zero
   new local dependencies. Embedding calls incur Bedrock token costs. Notes are
   chunked before embedding (via `src/vault/note-chunker.ts`) to improve

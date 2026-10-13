@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Writable } from 'node:stream';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { simulateReadableStream } from 'ai';
+import { APICallError, simulateReadableStream } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
 import { CliSession } from '../cli/index.js';
 import type { CliDeps } from '../cli/index.js';
@@ -297,5 +297,112 @@ describe('/index commands', () => {
     await session.processCommand('/index refresh');
     expect(captured()).toContain('BM25 index refreshed:');
     expect(captured()).toContain('Embedding index refreshed:');
+  });
+});
+
+describe('provider failures are shown as readable messages', () => {
+  const LORECRAFT_DIR = path.join(FIXTURE_VAULT, '.lorecraft');
+  let captured: () => string;
+  let output: NodeJS.WriteStream;
+
+  const connectionError = () =>
+    new APICallError({
+      message: 'Cannot connect to API: fetch failed',
+      url: 'http://127.0.0.1:11434/api/chat',
+      requestBodyValues: {},
+      isRetryable: false,
+    });
+
+  const missingModelError = () =>
+    new APICallError({
+      message: 'Not Found',
+      url: 'http://127.0.0.1:11434/api/chat',
+      requestBodyValues: {},
+      statusCode: 404,
+      responseBody: JSON.stringify({ error: 'model "qwen3" not found, try pulling it first' }),
+    });
+
+  function failingModel(error: () => Error) {
+    return new MockLanguageModelV3({
+      doStream: async () => {
+        throw error();
+      },
+    });
+  }
+
+  beforeEach(() => {
+    delete process.env['OLLAMA_BASE_URL'];
+    const out = makeOutput();
+    captured = out.captured;
+    output = out.stream;
+  });
+
+  afterEach(async () => {
+    await fs.rm(LORECRAFT_DIR, { recursive: true, force: true });
+  });
+
+  it('/generate with Ollama unreachable: prints the Ollama hint, state stays null', async () => {
+    const session = new CliSession({
+      model: failingModel(connectionError),
+      vaultRoot: FIXTURE_VAULT,
+      output,
+    });
+    await session.processCommand('/generate npc name:Mira role:Spy');
+    expect(session.currentState).toBeNull();
+    expect(captured()).toMatch(/Error: Cannot reach Ollama.*OLLAMA_BASE_URL/);
+  });
+
+  it('/generate with a model that is not pulled: prints the ollama pull hint', async () => {
+    const session = new CliSession({
+      model: failingModel(missingModelError),
+      vaultRoot: FIXTURE_VAULT,
+      output,
+    });
+    await session.processCommand('/generate npc name:Mira role:Spy');
+    expect(captured()).toMatch(/ollama pull qwen3/);
+  });
+
+  it('unrecognised generation errors keep their original message', async () => {
+    const session = new CliSession({
+      model: failingModel(() => new Error('something else broke')),
+      vaultRoot: FIXTURE_VAULT,
+      output,
+    });
+    await session.processCommand('/generate npc name:Mira role:Spy');
+    expect(captured()).toContain('Error: something else broke');
+  });
+
+  it('a failure during a continuation turn is printed instead of thrown', async () => {
+    const session = new CliSession({
+      model: makeMockModel(),
+      vaultRoot: FIXTURE_VAULT,
+      output,
+    });
+    await session.processCommand('/generate npc name:Mira role:Spy');
+    const active = session.currentState!;
+    vi.spyOn(active, 'continue').mockRejectedValueOnce(connectionError());
+
+    await expect(session.processCommand('make her older')).resolves.toBeDefined();
+    expect(captured()).toMatch(/Error: Cannot reach Ollama/);
+    expect(session.currentState).toBe(active);
+  });
+
+  it('/index rebuild with an unreachable embedding server prints the hint instead of throwing', async () => {
+    const provider = makeMockEmbeddingProvider('nomic-embed-text');
+    provider.embedMany = vi.fn().mockRejectedValue(
+      new APICallError({
+        message: 'Cannot connect to API: fetch failed',
+        url: 'http://127.0.0.1:11434/api/embed',
+        requestBodyValues: {},
+        isRetryable: false,
+      }),
+    );
+    const session = new CliSession({
+      vaultRoot: FIXTURE_VAULT,
+      output,
+      embeddingProvider: provider,
+    });
+    await expect(session.processCommand('/index rebuild')).resolves.toBeDefined();
+    expect(captured()).toMatch(/Error: Cannot reach Ollama/);
   });
 });

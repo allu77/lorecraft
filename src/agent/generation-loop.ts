@@ -6,7 +6,8 @@ import { TemplateParser } from '../vault/template-parser.js';
 import { ContextBudget } from './context-budget.js';
 import { buildPrompt } from './prompt-builder.js';
 import type { ContextNote } from './prompt-builder.js';
-import { getModel } from '../llm/provider.js';
+import { getContextWindow, getModel, getModelInfo } from '../llm/provider.js';
+import { budgetWindowWarning } from './context-window.js';
 import { getLogger } from '../utils/logger.js';
 import type { VaultIndex } from '../vault/vault-index.js';
 import type { VaultEmbeddings } from '../vault/vault-embeddings.js';
@@ -139,7 +140,10 @@ export class GenerationSession {
     const { vaultRoot, templatePath, inputs } = options;
     const model = options.model ?? getModel();
 
-    log.info({ model: process.env['MODEL_ID'] ?? 'default' }, 'model resolved');
+    const { provider, modelId } = options.model
+      ? { provider: 'injected', modelId: 'injected' }
+      : getModelInfo();
+    log.info({ provider, model: modelId }, 'model resolved');
 
     const reader = new VaultReader(vaultRoot);
     const parser = new TemplateParser();
@@ -173,6 +177,12 @@ export class GenerationSession {
         ? Number(process.env['CONTEXT_BUDGET_TOKENS'])
         : DEFAULT_BUDGET_TOKENS);
     const budget = new ContextBudget(ceiling);
+    const contextWindow = options.model ? null : getContextWindow();
+    const windowWarning =
+      contextWindow === null ? undefined : budgetWindowWarning(ceiling, contextWindow);
+    if (windowWarning) {
+      log.warn({ budgetTokens: ceiling, windowTokens: contextWindow }, windowWarning);
+    }
     const campaignStyleIncluded = !!(
       campaignStyle && budget.fits(campaignStyle)
     );
@@ -275,6 +285,10 @@ export class GenerationSession {
         case 'tool-call':
           callbacks?.onToolCall?.(part.toolName, part.input);
           break;
+        case 'error':
+          // The stream swallows model errors and later fails with "No output generated";
+          // rethrow so callers see the real cause (e.g. Ollama unreachable).
+          throw part.error;
       }
     }
 
@@ -340,6 +354,10 @@ export class GenerationSession {
         case 'tool-call':
           callbacks?.onToolCall?.(part.toolName, part.input);
           break;
+        case 'error':
+          // The stream swallows model errors and later fails with "No output generated";
+          // rethrow so callers see the real cause (e.g. Ollama unreachable).
+          throw part.error;
       }
     }
 

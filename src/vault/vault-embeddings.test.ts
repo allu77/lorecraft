@@ -140,6 +140,13 @@ describe('VaultEmbeddings', () => {
     await expect(index.isStale(vaultRoot, differentProvider)).resolves.toBe(true);
   });
 
+  it('isStale() flags an index built with Bedrock Titan as stale for an Ollama provider', async () => {
+    const titan = makeMockProvider('amazon.titan-embed-text-v2:0');
+    const index = await VaultEmbeddings.build(vaultRoot, titan);
+    const nomic = makeMockProvider('nomic-embed-text');
+    await expect(index.isStale(vaultRoot, nomic)).resolves.toBe(true);
+  });
+
   it('isStale() returns false when provider modelId matches stored modelId', async () => {
     const index = await VaultEmbeddings.build(vaultRoot, provider);
     const sameProvider = makeMockProvider('mock-v1');

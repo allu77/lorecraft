@@ -42,11 +42,49 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 ### Ollama (local, no account required)
+
+Install [Ollama](https://ollama.com), then pull a chat model that supports tool
+calling and (optionally) an embedding model:
+
+```bash
+ollama pull llama3.1          # or qwen3
+ollama pull nomic-embed-text  # for semantic search
+```
+
 ```
 LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3
+OLLAMA_BASE_URL=http://localhost:11434/api
+OLLAMA_MODEL=llama3.1
+OLLAMA_NUM_CTX=16384
+
+# Optional: local semantic search
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_MODEL_ID=nomic-embed-text
 ```
+
+- `OLLAMA_BASE_URL` is passed to the adapter as written, so it **must end in `/api`**.
+  When unset the adapter uses `http://127.0.0.1:11434/api`.
+- `OLLAMA_NUM_CTX` is sent as `num_ctx` on every request. Ollama's own default
+  (2k to 4k tokens) silently truncates the vault context Lorecraft assembles, which is
+  why Lorecraft defaults to 16384. Keep it at least `CONTEXT_BUDGET_TOKENS + 4096`; the
+  session logs a warning when it is too small. Larger windows use more RAM/VRAM.
+- Known embedding models are `nomic-embed-text` (768 dimensions), `mxbai-embed-large`
+  (1024) and `all-minilm` (384). For any other model set `EMBEDDING_DIMENSIONS`.
+- Switching `EMBEDDING_PROVIDER` or `EMBEDDING_MODEL_ID` marks the existing embedding
+  index stale; run `/index rebuild`.
+- Not every local model handles tool calls reliably. If wikilink or search tools are
+  never called, try a different model.
+- Errors: "Cannot reach Ollama" means the server is not running or `OLLAMA_BASE_URL` is
+  wrong; "model ... is not available" means run `ollama pull <model>`.
+
+#### Smoke test
+
+1. `ollama serve` (or the desktop app), pull the two models above.
+2. Set the variables above and `VAULT_ROOT`, then `pnpm cli`.
+3. `/index rebuild` — expect "Embedding index built ... (nomic-embed-text)".
+4. `/generate npc name:"Mira" role:Spy` — expect streamed text, tool calls (if the
+   template uses them) and a `Tokens:` line, and no context-window warning in the log
+   (`/verbose on` shows it).
 
 ## Run the CLI
 

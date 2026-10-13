@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { VaultIndex } from '../vault/vault-index.js';
 import { VaultEmbeddings } from '../vault/vault-embeddings.js';
 import { getEmbeddingProvider } from '../llm/embedding-provider.js';
+import { describeProviderError } from '../llm/errors.js';
 import type { EmbeddingProvider } from '../vault/embedding-provider.js';
 import { initLogger } from '../utils/logger.js';
 
@@ -330,7 +331,7 @@ async function main(): Promise<void> {
       process.exit(1);
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = describeProviderError(err) ?? (err instanceof Error ? err.message : String(err));
     process.stderr.write(`Error: ${msg}\n`);
     process.exit(1);
   }
