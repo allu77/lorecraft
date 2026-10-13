@@ -1,6 +1,6 @@
 # Requirements — v02-sprint-ollama: Ollama provider (chat + embeddings)
 
-> **Status:** Draft
+> **Status:** Approved
 > **Sprint:** v02-sprint-ollama
 > **Created:** 2026-10-13
 > **Revised:** 2026-10-13 (rebased on `main` after v03-ai-sdk-7: `ai` 7.x, embedding provider moved to `src/llm/`)
