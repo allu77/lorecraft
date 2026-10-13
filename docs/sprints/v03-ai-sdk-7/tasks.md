@@ -24,7 +24,7 @@
 
 ### Setup
 
-- [ ] 001 — Verify the CI baseline on the current AI SDK 6 setup
+- [x] 001 — Verify the CI baseline on the current AI SDK 6 setup
   - Run `pnpm typecheck && pnpm lint && pnpm test && pnpm build`; fix any pre-existing failures before proceeding
   - Record the resolved versions (`ai` 6.0.168, zod 4.3.6) for rollback reference in the commit message
 - [ ] 002 — Upgrade dependencies, pin with `~`, and run the compatibility spike
