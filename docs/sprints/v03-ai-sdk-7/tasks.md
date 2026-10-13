@@ -74,7 +74,7 @@
 
 ### Integration
 
-- [ ] 010 — [test] Provider boundary check (`src/__tests__/provider-boundary.test.ts`)
+- [x] 010 — [test] Provider boundary check (`src/__tests__/provider-boundary.test.ts`)
   - Scan `src/**/*.ts` (excluding test files); assert that `@ai-sdk/amazon-bedrock` is imported only from `src/llm/provider.ts`
   - Assert that `src/vault/` has no imports from `src/agent/` or `src/cli/` (ADR-002)
 - [ ] 011 — Sweep for removed or renamed v7 identifiers
