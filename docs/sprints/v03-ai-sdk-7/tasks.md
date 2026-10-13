@@ -50,7 +50,7 @@
   - Review `tools.ts` and `ToolLoopAgent` options against the v7 guide; record non-changes in the commit message
 - [x] 005 — Add `getEmbeddingModel(modelId)` (`src/llm/provider.ts`)
   - Returns `bedrock.embeddingModel(modelId)` typed as the SDK's `EmbeddingModel`
-- [ ] 006 — Move the Bedrock embedding implementation into `src/llm/`
+- [x] 006 — Move the Bedrock embedding implementation into `src/llm/`
   (`src/llm/embedding-provider.ts`, `src/vault/embedding-provider.ts`,
   `src/cli/index.ts`, `src/cli/inspect.ts`)
   - Move `BedrockEmbeddingProvider` and `getEmbeddingProvider()` to `src/llm/embedding-provider.ts`; call `getEmbeddingModel` from `./provider.js`; no import from `src/vault/` (structural typing)
@@ -67,7 +67,7 @@
   - Confirm the history test fails against the old `response.messages` code, if feasible
 - [x] 008 — [test] `getEmbeddingModel` unit test for task 005 (`src/llm/provider.test.ts`)
   - `getEmbeddingModel('x')` returns a model with `modelId` `'x'`; no network
-- [ ] 009 — [test] Move and update embedding provider tests for task 006
+- [x] 009 — [test] Move and update embedding provider tests for task 006
   (`src/llm/embedding-provider.test.ts`, from `src/vault/embedding-provider.test.ts`)
   - Replace the Bedrock package mock with a mock of `./provider.js`; keep all existing cases
   - Add a case asserting `getEmbeddingModel` is called with `EMBEDDING_MODEL_ID` when set

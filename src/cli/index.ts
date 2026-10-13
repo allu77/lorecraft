@@ -8,7 +8,7 @@ import { GenerationSession } from '../agent/generation-loop.js';
 import type { StreamCallbacks } from '../agent/generation-loop.js';
 import { VaultIndex } from '../vault/vault-index.js';
 import { VaultEmbeddings } from '../vault/vault-embeddings.js';
-import { getEmbeddingProvider } from '../vault/embedding-provider.js';
+import { getEmbeddingProvider } from '../llm/embedding-provider.js';
 import type { EmbeddingProvider } from '../vault/embedding-provider.js';
 import { initLogger, setVerbose, isVerbose, getLogger } from '../utils/logger.js';
 
