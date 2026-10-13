@@ -75,14 +75,14 @@
 
 ### Integration
 
-- [ ] 017 — Full run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`; confirm `src/agent/`, `src/cli/`, `src/vault/` contain no Ollama imports (boundary test green)
+- [x] 017 — Full run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`; confirm `src/agent/`, `src/cli/`, `src/vault/` contain no Ollama imports (boundary test green)
 - [ ] 018 — Manual smoke test against a real Ollama (not CI): pull `llama3.1` and `nomic-embed-text`, `/index rebuild`, `/generate` an NPC; confirm `num_ctx` in Ollama's log, tool calls work, token line printed; record the result in the sprint notes below
 
 ### Documentation and wrap-up
 
-- [ ] 019 — Update `.env.example` and `docs/development/setup.md`: `OLLAMA_BASE_URL=http://localhost:11434/api`, `OLLAMA_MODEL`, `OLLAMA_NUM_CTX`, `EMBEDDING_PROVIDER=ollama`, `EMBEDDING_MODEL_ID`, `EMBEDDING_DIMENSIONS`, recommended models, smoke-test steps (`.env.example`, `docs/development/setup.md`)
-- [ ] 020 — Amend ADR-004 (Bedrock or Ollama embeddings) and add the ADR-001 note on `LLM_PROVIDER` (`docs/architecture/decisions.md`)
-- [ ] 021 — Update fixture vault if new note types were introduced: none expected (`src/__tests__/fixtures/test-vault/`)
+- [x] 019 — Update `.env.example` and `docs/development/setup.md`: `OLLAMA_BASE_URL=http://localhost:11434/api`, `OLLAMA_MODEL`, `OLLAMA_NUM_CTX`, `EMBEDDING_PROVIDER=ollama`, `EMBEDDING_MODEL_ID`, `EMBEDDING_DIMENSIONS`, recommended models, smoke-test steps (`.env.example`, `docs/development/setup.md`)
+- [x] 020 — Amend ADR-004 (Bedrock or Ollama embeddings) and add the ADR-001 note on `LLM_PROVIDER` (`docs/architecture/decisions.md`)
+- [x] 021 — Update fixture vault if new note types were introduced: none expected (`src/__tests__/fixtures/test-vault/`)
 - [ ] 022 — Update `docs/sprints/overview.md` to mark sprint complete (`docs/sprints/overview.md`)
 
 ---
@@ -102,10 +102,11 @@
 -->
 
 - [x] D1 — `GenerationSession.generate()`/`continue()` ignored `error` stream parts, so any model failure (Bedrock too) surfaced as "No output generated. Check the stream for errors."; now rethrown so the real cause reaches the CLI (`src/agent/generation-loop.ts`, covered by `cli.integration.test.ts`) (discovered: 2026-10-13)
+- [x] D3 — Added `src/__tests__/ollama-wire.integration.test.ts`: runs the real adapter against a stub Ollama HTTP server and asserts `num_ctx`, model, embeddings and usage counts on the wire (discovered: 2026-10-13)
 - [x] D2 — `processCommand` let continuation and `/index` errors escape as unhandled rejections inside the readline handler; now caught and printed through `reportError` (`src/cli/index.ts`) (discovered: 2026-10-13)
 
 ---
 
 ## Smoke test notes
 
-<!-- Task 018: model versions, machine, num_ctx used, results. -->
+Task 018 is **not done**: the cloud session had no Ollama server (`ollama` not installed, port 11434 closed, no model downloads). As a partial stand-in, `ollama-wire.integration.test.ts` runs the real adapter against a stub server and verifies the request bodies (`options.num_ctx`, model, `/api/chat`, `/api/embed`) and usage mapping. It cannot show real tool-calling quality or truncation behaviour. Run the smoke test in `docs/development/setup.md` locally and record model versions, machine, `num_ctx`, and results here.
