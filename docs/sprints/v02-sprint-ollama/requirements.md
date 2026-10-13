@@ -27,7 +27,7 @@ working unchanged.
 generates content with a model running on my own machine.
 
 1. With `LLM_PROVIDER=ollama`, `getModel()` returns a model backed by the Ollama
-   server at `OLLAMA_BASE_URL` (default `http://localhost:11434`) using
+   server at `OLLAMA_BASE_URL` (used as given, e.g. `http://localhost:11434/api`; when unset the adapter default applies) using
    `OLLAMA_MODEL` (default `llama3`).
 2. With `LLM_PROVIDER` unset or `bedrock`, behaviour is identical to today
    (Bedrock, `MODEL_ID`).
@@ -114,7 +114,8 @@ the existing "report after every generation" invariant still holds.
 that** the new provider is discoverable and the architecture docs are
 accurate.
 
-1. `.env.example` and `docs/development/setup.md` document `OLLAMA_BASE_URL`,
+1. `.env.example` and `docs/development/setup.md` document `OLLAMA_BASE_URL`
+   (with the `/api` suffix the adapter requires),
    `OLLAMA_MODEL`, `OLLAMA_NUM_CTX`, `EMBEDDING_PROVIDER=ollama`, and the
    recommended models.
 2. `docs/architecture/decisions.md` records the decision (ADR-004 amended or a

@@ -27,7 +27,7 @@ not only its README, and against `ai@7.0.x`.
 
 | Fact (from `ollama-ai-provider-v2@4.0.1` dist) | Consequence |
 |---|---|
-| Default base URL is `http://127.0.0.1:11434/api`; chat posts to `${baseURL}/chat`, embeddings to `${baseURL}/embed`. | `OLLAMA_BASE_URL` is documented as `http://localhost:11434` (no `/api`). We must append `/api`, or every request 404s. |
+| Default base URL is `http://127.0.0.1:11434/api`; chat posts to `${baseURL}/chat`, embeddings to `${baseURL}/embed`. | `OLLAMA_BASE_URL` is passed to the adapter **verbatim**, so it must include `/api` (e.g. `http://localhost:11434/api`). No URL rewriting in code; `.env.example` and `setup.md` are corrected instead. |
 | `provider(modelId)` and `provider.chat(modelId)` are the same model; `chat()` does **not** apply constructor settings. | `num_ctx` cannot be set when creating the model. It is read per call from `providerOptions.ollama.options.num_ctx`. |
 | Usage comes from `prompt_eval_count` / `eval_count` and defaults to 0 when absent. | `normalizeUsage` already handles this; no code change, one test. |
 | Peer dependency `ai ^7`, Node 22+. | Matches the repo after v03-ai-sdk-7. |
@@ -40,8 +40,8 @@ not only its README, and against `ai@7.0.x`.
 ```
 package.json                                   (mod) + ollama-ai-provider-v2 "~4.0.1"
 pnpm-lock.yaml                                 (mod)
-.env.example                                   (mod) OLLAMA_* vars, EMBEDDING_PROVIDER=ollama
-docs/development/setup.md                      (mod) Ollama section, recommended models
+.env.example                                   (mod) OLLAMA_* vars (base URL with /api), EMBEDDING_PROVIDER=ollama
+docs/development/setup.md                      (mod) Ollama section (base URL ends in /api), recommended models
 docs/architecture/decisions.md                 (mod) amend ADR-004 (+ ADR-001 note)
 docs/sprints/overview.md                       (mod) add sprint
 src/
@@ -78,8 +78,8 @@ export type LlmProviderName = 'bedrock' | 'ollama';
 export type EmbeddingProviderName = 'bedrock' | 'ollama';
 
 export type OllamaConfig = {
-  /** Always ends in `/api`, as the adapter requires. */
-  baseURL: string;
+  /** `OLLAMA_BASE_URL`, passed verbatim (must include `/api`). Undefined → adapter default. */
+  baseURL: string | undefined;
   /** `OLLAMA_MODEL`, default `llama3.1`. */
   model: string;
   /** `OLLAMA_NUM_CTX`, default 16384. */
@@ -90,7 +90,6 @@ export const DEFAULT_OLLAMA_NUM_CTX = 16_384;
 
 export function getLlmProviderName(): LlmProviderName;          // throws on unknown / unimplemented
 export function getOllamaConfig(): OllamaConfig;                 // throws on invalid OLLAMA_NUM_CTX
-export function normalizeOllamaBaseURL(raw: string | undefined): string;
 ```
 
 ```typescript
@@ -155,7 +154,7 @@ still does not import from `src/vault/`.
 1. `.env`: `LLM_PROVIDER=ollama`, `OLLAMA_MODEL=qwen3`, `OLLAMA_NUM_CTX=32768`.
 2. `GenerationSession.create()` calls `getModel()` (`src/llm/provider.ts`).
 3. `getLlmProviderName()` returns `ollama`; `getOllamaConfig()` validates
-   `OLLAMA_NUM_CTX` and normalises the URL to `http://localhost:11434/api`.
+   `OLLAMA_NUM_CTX` and reads `OLLAMA_BASE_URL` unchanged.
 4. `provider.ts` builds `createOllama({ baseURL })(model)` and wraps it:
    `wrapLanguageModel({ model, middleware: defaultSettingsMiddleware({ settings:
    { providerOptions: { ollama: { options: { num_ctx } } } } }) })`.
@@ -217,12 +216,14 @@ The check lives in `src/agent/` because only it knows the budget, and `src/agent
 may import `src/llm/`. It is skipped when a model is injected (tests).
 > **ADR candidate:** No
 
-### Decision 4: `OLLAMA_BASE_URL` is the server root; `/api` is appended
-**Chosen:** `normalizeOllamaBaseURL` strips trailing slashes and appends `/api` unless
-already present.
-**Alternatives considered:** require users to include `/api` (contradicts the existing
-`.env.example` and Ollama's own docs, and fails with a confusing 404).
-**Rationale:** Matches what GMs already know (`http://localhost:11434`).
+### Decision 4: `OLLAMA_BASE_URL` is passed to the adapter unchanged
+**Chosen:** No normalisation. The value is the adapter's `baseURL` as-is (it includes
+`/api`); when unset, `baseURL` is omitted and the adapter default
+(`http://127.0.0.1:11434/api`) applies. `.env.example` and `setup.md` show
+`OLLAMA_BASE_URL=http://localhost:11434/api`.
+**Alternatives considered:** strip trailing slashes and append `/api` in code (rejected:
+code workaround for what is only an example-file error).
+**Rationale:** Less code, no hidden behaviour; the docs are fixed where they were wrong.
 > **ADR candidate:** No
 
 ### Decision 5: Embedding dimension from a known-model table, with an override
@@ -285,8 +286,8 @@ Follows ADR-005/006: Vitest, adapters mocked, no live Ollama server.
 
 - **`config.test.ts`:** provider selection (unset, `bedrock`, `ollama`, `anthropic` →
   not-implemented error, junk → unknown-provider error listing supported values);
-  `OLLAMA_NUM_CTX` default, valid, `abc`, `0`, `-5`; `normalizeOllamaBaseURL`
-  (with/without trailing slash, with/without `/api`, unset → default).
+  `OLLAMA_NUM_CTX` default, valid, `abc`, `0`, `-5`; `OLLAMA_BASE_URL` passed through
+  unchanged, and unset leaves `baseURL` undefined.
 - **`provider.test.ts`:** mock `ollama-ai-provider-v2` and `ai`'s
   `wrapLanguageModel`; assert `createOllama` receives the normalised URL, the model ID
   is passed through, and the middleware settings carry `num_ctx`. A second case invokes
