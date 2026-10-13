@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22+ (required by AI SDK 7; Node 24 LTS recommended)
 - pnpm (`npm install -g pnpm`)
 - AWS credentials configured (for Bedrock) **or** an Anthropic API key
   **or** Ollama installed locally

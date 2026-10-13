@@ -87,7 +87,7 @@
 
 ### Documentation and wrap-up
 
-- [ ] 013 — Document the Node 22+ requirement (`docs/development/setup.md`)
+- [x] 013 — Document the Node 22+ requirement (`docs/development/setup.md`)
 - [ ] 014 — Amend ADRs (`docs/architecture/decisions.md`)
   - ADR-001: replace "(latest)" with pinned `~` ranges; upgrades happen as explicit sprints
   - ADR-004: the `EmbeddingProvider` interface lives in `src/vault/`; the Bedrock implementation lives in `src/llm/` and reaches the adapter only via `src/llm/provider.ts`
