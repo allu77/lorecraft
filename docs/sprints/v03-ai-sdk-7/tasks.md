@@ -1,6 +1,6 @@
 # Tasks — v03-ai-sdk-7: Upgrade Vercel AI SDK to 7.x
 
-> **Status:** Not started
+> **Status:** Complete
 > **Sprint:** v03-ai-sdk-7
 > **Requirements:** [requirements.md](requirements.md)
 > **Design:** [design.md](design.md)
@@ -93,7 +93,7 @@
   - ADR-004: the `EmbeddingProvider` interface lives in `src/vault/`; the Bedrock implementation lives in `src/llm/` and reaches the adapter only via `src/llm/provider.ts`
 - [x] 015 — Fixture vault: no change needed; generated `.lorecraft/` index files are now gitignored
   (`src/__tests__/fixtures/test-vault/`)
-- [ ] 016 — Update `docs/sprints/overview.md` to mark sprint complete
+- [x] 016 — Update `docs/sprints/overview.md` to mark sprint complete
   (`docs/sprints/overview.md`)
 
 ---

@@ -11,7 +11,7 @@
 | [v01-sprints](v01-sprints/) | BM25 Keyword Search | Complete |
 | [v02-sprints](v02-sprints/) | Semantic Search via Embeddings | In Progress |
 | [v02-sprint-addon](v02-sprint-addon/) | Index Inspector | Complete |
-| [v03-ai-sdk-7](v03-ai-sdk-7/) | Upgrade Vercel AI SDK to 7.x | In Progress |
+| [v03-ai-sdk-7](v03-ai-sdk-7/) | Upgrade Vercel AI SDK to 7.x | Complete |
 
 ---
 
