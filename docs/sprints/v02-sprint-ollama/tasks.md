@@ -26,8 +26,8 @@
 
 ### Setup
 
-- [ ] 001 — Verify baseline is green on `main` (`pnpm typecheck`, `lint`, `test`, `build`) and note the counts in the commit message
-- [ ] 002 — Add the adapter: `pnpm add ollama-ai-provider-v2@~4.0.1` (`package.json`, `pnpm-lock.yaml`)
+- [x] 001 — Verify baseline is green on `main` (`pnpm typecheck`, `lint`, `test`, `build`) and note the counts in the commit message
+- [x] 002 — Add the adapter: `pnpm add ollama-ai-provider-v2@~4.0.1` (`package.json`, `pnpm-lock.yaml`)
   - Confirm no peer-dependency warnings against `ai` 7.0.x
 
 ### Configuration (`src/llm/config.ts`)
