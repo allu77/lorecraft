@@ -12,6 +12,7 @@ const ollama = vi.hoisted(() => ({
   createOllama: vi.fn(),
   inner: undefined as unknown,
   modelFactory: vi.fn(),
+  embeddingFactory: vi.fn(),
 }));
 
 vi.mock('ollama-ai-provider-v2', () => ({
@@ -161,8 +162,29 @@ describe('llm provider', () => {
 });
 
 describe('getEmbeddingModel', () => {
-  it('returns an embedding model for the given model ID without network access', () => {
-    const model = getEmbeddingModel('amazon.titan-embed-text-v2:0');
+  beforeEach(() => {
+    ollama.embeddingFactory.mockReset().mockReturnValue({ modelId: 'nomic-embed-text' });
+    ollama.createOllama.mockReset().mockReturnValue({ embeddingModel: ollama.embeddingFactory });
+    delete process.env['OLLAMA_BASE_URL'];
+  });
+
+  it('returns a Bedrock embedding model without network access', () => {
+    const model = getEmbeddingModel('bedrock', 'amazon.titan-embed-text-v2:0');
     expect(model).toMatchObject({ modelId: 'amazon.titan-embed-text-v2:0' });
+    expect(ollama.createOllama).not.toHaveBeenCalled();
+  });
+
+  it('returns an Ollama embedding model using the configured base URL', () => {
+    process.env['OLLAMA_BASE_URL'] = 'http://box:11434/api';
+    const model = getEmbeddingModel('ollama', 'nomic-embed-text');
+    expect(model).toMatchObject({ modelId: 'nomic-embed-text' });
+    expect(ollama.createOllama).toHaveBeenCalledWith({ baseURL: 'http://box:11434/api' });
+    expect(ollama.embeddingFactory).toHaveBeenCalledWith('nomic-embed-text');
+    delete process.env['OLLAMA_BASE_URL'];
+  });
+
+  it('omits baseURL for Ollama when OLLAMA_BASE_URL is unset', () => {
+    getEmbeddingModel('ollama', 'nomic-embed-text');
+    expect(ollama.createOllama).toHaveBeenCalledWith({});
   });
 });

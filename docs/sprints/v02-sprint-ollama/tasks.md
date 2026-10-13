@@ -50,13 +50,13 @@
 
 ### Embeddings
 
-- [ ] 008 — [test] Embedding provider tests written first (`src/llm/embedding-provider.test.ts`)
+- [x] 008 — [test] Embedding provider tests written first (`src/llm/embedding-provider.test.ts`)
   - `EMBEDDING_PROVIDER=ollama` returns `OllamaEmbeddingProvider`; default `nomic-embed-text` / 768
   - Table lookup, `EMBEDDING_DIMENSIONS` override, unknown model without override → error with the fix
   - Unknown provider error lists `bedrock` and `ollama`
   - `embed` / `embedMany` call `getEmbeddingModel('ollama', modelId)`; empty `embedMany` returns `[]`
   - Existing Bedrock cases updated for the new `getEmbeddingModel(provider, modelId)` signature
-- [ ] 009 — Change `getEmbeddingModel` to `(provider, modelId)` with Ollama support; add `OllamaEmbeddingProvider`, `OLLAMA_EMBEDDING_DIMENSIONS`, and the `ollama` branch of `getEmbeddingProvider()` (`src/llm/provider.ts`, `src/llm/embedding-provider.ts`)
+- [x] 009 — Change `getEmbeddingModel` to `(provider, modelId)` with Ollama support; add `OllamaEmbeddingProvider`, `OLLAMA_EMBEDDING_DIMENSIONS`, and the `ollama` branch of `getEmbeddingProvider()` (`src/llm/provider.ts`, `src/llm/embedding-provider.ts`)
   - Update the Bedrock call sites to pass `'bedrock'`
 - [ ] 010 — [test] A `VaultEmbeddings` built with a Titan model ID reports stale for an Ollama model ID provider (`src/vault/vault-embeddings.test.ts`)
 

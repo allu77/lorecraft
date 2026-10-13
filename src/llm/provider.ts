@@ -7,7 +7,12 @@ import {
 } from 'ai';
 import { createOllama } from 'ollama-ai-provider-v2';
 import { getLogger } from '../utils/logger.js';
-import { getLlmProviderName, getOllamaConfig, type LlmProviderName } from './config.js';
+import {
+  getLlmProviderName,
+  getOllamaConfig,
+  type EmbeddingProviderName,
+  type LlmProviderName,
+} from './config.js';
 
 const DEFAULT_BEDROCK_MODEL_ID = 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
 
@@ -71,12 +76,20 @@ export function getContextWindow(): number | null {
 }
 
 /**
- * Returns an Amazon Bedrock embedding model for use with Vercel AI SDK `embed` /
- * `embedMany` calls. Credentials are resolved the same way as for `getModel()`.
+ * Returns an embedding model for use with Vercel AI SDK `embed` / `embedMany` calls.
+ * Credentials and connection settings are resolved the same way as for `getModel()`.
  *
- * @param modelId - Bedrock embedding model ID (e.g. `amazon.titan-embed-text-v2:0`).
- * @returns A Vercel AI SDK `EmbeddingModel` instance backed by Amazon Bedrock.
+ * @param provider - Embedding provider to use.
+ * @param modelId - Provider-specific model ID (e.g. `amazon.titan-embed-text-v2:0`, `nomic-embed-text`).
+ * @returns A Vercel AI SDK `EmbeddingModel` instance backed by the provider.
  */
-export function getEmbeddingModel(modelId: string): EmbeddingModel {
+export function getEmbeddingModel(
+  provider: EmbeddingProviderName,
+  modelId: string,
+): EmbeddingModel {
+  if (provider === 'ollama') {
+    const { baseURL } = getOllamaConfig();
+    return createOllama(baseURL ? { baseURL } : {}).embeddingModel(modelId);
+  }
   return bedrock.embeddingModel(modelId);
 }
