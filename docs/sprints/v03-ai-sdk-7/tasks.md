@@ -91,7 +91,7 @@
 - [x] 014 — Amend ADRs (`docs/architecture/decisions.md`)
   - ADR-001: replace "(latest)" with pinned `~` ranges; upgrades happen as explicit sprints
   - ADR-004: the `EmbeddingProvider` interface lives in `src/vault/`; the Bedrock implementation lives in `src/llm/` and reaches the adapter only via `src/llm/provider.ts`
-- [ ] 015 — Fixture vault: no change expected; confirm and tick
+- [x] 015 — Fixture vault: no change needed; generated `.lorecraft/` index files are now gitignored
   (`src/__tests__/fixtures/test-vault/`)
 - [ ] 016 — Update `docs/sprints/overview.md` to mark sprint complete
   (`docs/sprints/overview.md`)
