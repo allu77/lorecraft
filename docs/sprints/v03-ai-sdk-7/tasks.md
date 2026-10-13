@@ -48,7 +48,7 @@
   - `await streamResult.totalUsage` → `await streamResult.usage` (Decision 1)
   - `(await streamResult.response).messages` → `await streamResult.responseMessages` (Decision 2)
   - Review `tools.ts` and `ToolLoopAgent` options against the v7 guide; record non-changes in the commit message
-- [ ] 005 — Add `getEmbeddingModel(modelId)` (`src/llm/provider.ts`)
+- [x] 005 — Add `getEmbeddingModel(modelId)` (`src/llm/provider.ts`)
   - Returns `bedrock.embeddingModel(modelId)` typed as the SDK's `EmbeddingModel`
 - [ ] 006 — Move the Bedrock embedding implementation into `src/llm/`
   (`src/llm/embedding-provider.ts`, `src/vault/embedding-provider.ts`,
@@ -65,7 +65,7 @@
   - Mock model: tool call on step 1, answer on step 2, with different usage per step; assert `GenerateResult.usage` is the sum
   - Then call `continue()` and assert the request the mock receives contains the assistant tool call and the tool result
   - Confirm the history test fails against the old `response.messages` code, if feasible
-- [ ] 008 — [test] `getEmbeddingModel` unit test for task 005 (`src/llm/provider.test.ts`)
+- [x] 008 — [test] `getEmbeddingModel` unit test for task 005 (`src/llm/provider.test.ts`)
   - `getEmbeddingModel('x')` returns a model with `modelId` `'x'`; no network
 - [ ] 009 — [test] Move and update embedding provider tests for task 006
   (`src/llm/embedding-provider.test.ts`, from `src/vault/embedding-provider.test.ts`)
