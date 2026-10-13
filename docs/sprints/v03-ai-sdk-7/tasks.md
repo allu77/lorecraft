@@ -27,7 +27,7 @@
 - [x] 001 — Verify the CI baseline on the current AI SDK 6 setup
   - Run `pnpm typecheck && pnpm lint && pnpm test && pnpm build`; fix any pre-existing failures before proceeding
   - Record the resolved versions (`ai` 6.0.168, zod 4.3.6) for rollback reference in the commit message
-- [ ] 002 — Upgrade dependencies, pin with `~`, and run the compatibility spike
+- [x] 002 — Upgrade dependencies, pin with `~`, and run the compatibility spike
   (`package.json`, `pnpm-lock.yaml`)
   - Set `ai` and `@ai-sdk/amazon-bedrock` to `~` ranges of the newest 7.0.x / 5.0.x; pin `zod` with `~4.3.6`
   - Add `"engines": { "node": ">=22" }`; raise `@types/node` to `^22`
@@ -107,3 +107,6 @@
 
 - [ ] NNN — Description (discovered: YYYY-MM-DD)
 -->
+
+- [ ] 017 — Fix `tools.test.ts` type errors: v7 `ToolExecutionOptions` requires `context`; 4 call sites pass `{ messages, toolCallId }` (`src/agent/tools.test.ts`) (discovered: 2026-10-13)
+- [ ] 018 — Review and update the prompt snapshot in `generation-loop.integration.test.ts`: v7 adds `headers: { user-agent: 'ai-sdk-agent/tool-loop' }`, `reasoning: undefined`, and drops `providerOptions` on the tool entry; prompt content is unchanged (discovered: 2026-10-13)
