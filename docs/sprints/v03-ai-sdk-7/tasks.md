@@ -56,10 +56,10 @@
 
 ### Tests
 
-- [ ] 007 — [test] Multi-step usage and history tests for task 004
+- [x] 007 — [test] Multi-step usage and history tests for task 004
   (`src/__tests__/generation-loop.integration.test.ts`)
   - Mock model: tool call on step 1, answer on step 2, with different usage per step; assert `GenerateResult.usage` is the sum
-  - Then call `reply()` and assert the request the mock receives contains the assistant tool call and the tool result
+  - Then call `continue()` and assert the request the mock receives contains the assistant tool call and the tool result
   - Confirm the history test fails against the old `response.messages` code, if feasible
 - [ ] 008 — [test] `getEmbeddingModel` unit test for task 005 (`src/llm/provider.test.ts`)
   - `getEmbeddingModel('x')` returns a model with `modelId` `'x'`; no network
