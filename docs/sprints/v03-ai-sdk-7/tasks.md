@@ -37,7 +37,7 @@
 
 ### Core implementation
 
-- [ ] 003 — Migrate the test mock models (`src/__tests__/cli.integration.test.ts`,
+- [x] 003 — Migrate the test mock models (`src/__tests__/cli.integration.test.ts`,
   `src/__tests__/generation-loop.integration.test.ts`,
   `src/__tests__/agent-vault.integration.test.ts`)
   - Apply the decision from task 002 (design Decision 3); change nothing if V3 still works
