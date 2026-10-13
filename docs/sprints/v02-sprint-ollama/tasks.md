@@ -40,13 +40,13 @@
 
 ### Chat provider (`src/llm/provider.ts`)
 
-- [ ] 005 — [test] Provider tests written first (`src/llm/provider.test.ts`)
+- [x] 005 — [test] Provider tests written first (`src/llm/provider.test.ts`)
   - Mock `ollama-ai-provider-v2`; assert `createOllama` gets the base URL (or none) and the model ID
   - Invoke the wrapped model's `doGenerate`: `num_ctx` reaches the inner mock; call-level `providerOptions.ollama` keys are preserved (spike: does `defaultSettingsMiddleware` merge? if not, switch to a `transformParams` middleware)
   - Bedrock path unchanged when `LLM_PROVIDER` is unset
   - `getModelInfo()` and `getContextWindow()` (Ollama → window, Bedrock → `null`)
-- [ ] 006 — Implement the `LLM_PROVIDER` switch, `num_ctx` middleware, `getModelInfo()`, `getContextWindow()`; log the effective `num_ctx` at `info` (`src/llm/provider.ts`)
-- [ ] 007 — [test] Extend the boundary test to assert both `@ai-sdk/amazon-bedrock` and `ollama-ai-provider-v2` are imported only from `src/llm/provider.ts` (`src/__tests__/provider-boundary.test.ts`)
+- [x] 006 — Implement the `LLM_PROVIDER` switch, `num_ctx` middleware, `getModelInfo()`, `getContextWindow()`; log the effective `num_ctx` at `info` (`src/llm/provider.ts`)
+- [x] 007 — [test] Extend the boundary test to assert both `@ai-sdk/amazon-bedrock` and `ollama-ai-provider-v2` are imported only from `src/llm/provider.ts` (`src/__tests__/provider-boundary.test.ts`)
 
 ### Embeddings
 

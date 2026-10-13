@@ -36,12 +36,15 @@ function importsFromModule(moduleDir: string, forbidden: string[]): string[] {
 }
 
 describe('provider and module boundaries', () => {
-  it('only src/llm/provider.ts imports the Bedrock adapter', () => {
-    const offenders = sourceFiles(SRC)
-      .filter((file) => importsOf(file).includes('@ai-sdk/amazon-bedrock'))
-      .map((file) => path.relative(SRC, file));
-    expect(offenders).toEqual([path.join('llm', 'provider.ts')]);
-  });
+  it.each(['@ai-sdk/amazon-bedrock', 'ollama-ai-provider-v2'])(
+    'only src/llm/provider.ts imports the %s adapter',
+    (adapter) => {
+      const offenders = sourceFiles(SRC)
+        .filter((file) => importsOf(file).includes(adapter))
+        .map((file) => path.relative(SRC, file));
+      expect(offenders).toEqual([path.join('llm', 'provider.ts')]);
+    },
+  );
 
   it('src/vault/ does not import from agent/, llm/ or cli/', () => {
     expect(importsFromModule('vault', ['agent', 'llm', 'cli'])).toEqual([]);
