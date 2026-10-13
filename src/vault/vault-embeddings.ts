@@ -190,8 +190,12 @@ export class VaultEmbeddings {
    * Incrementally re-embeds changed files, adds new ones, and removes deleted ones,
    * then persists the result.
    *
+   * When `provider.modelId` differs from the model the index was built with, every
+   * note is re-embedded: vectors from different models live in different spaces
+   * (and may have different dimensions), so they must never be mixed.
+   *
    * @param vaultRoot - Absolute path to the vault root directory.
-   * @param provider  - Embedding provider (must use same model as the loaded index).
+   * @param provider  - Embedding provider to embed changed notes with.
    * @returns Counts of added, updated, and removed notes.
    */
   async update(
@@ -203,6 +207,17 @@ export class VaultEmbeddings {
     const currentNotes = await reader.listNotes();
     const currentRelPaths = new Set<string>();
 
+    const modelChanged = provider.modelId !== this.meta.modelId;
+    if (modelChanged) {
+      log.info(
+        { previousModelId: this.meta.modelId, modelId: provider.modelId },
+        'embedding model changed, re-embedding all notes',
+      );
+      this.chunks = [];
+      this.meta.modelId = provider.modelId;
+      this.meta.dimensions = provider.dimensions;
+    }
+
     let added = 0;
     let updated = 0;
 
@@ -212,7 +227,7 @@ export class VaultEmbeddings {
       const stat = await fs.stat(filePath);
       const storedMtime = this.meta.fileMtimes[relPath];
 
-      if (storedMtime === undefined || storedMtime !== stat.mtimeMs) {
+      if (modelChanged || storedMtime === undefined || storedMtime !== stat.mtimeMs) {
         const noteName = path.basename(filePath, '.md');
         const content = await reader.readNote(filePath);
         const noteChunks = chunkNote(noteName, content);

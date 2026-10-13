@@ -157,9 +157,9 @@ export class CliSession {
       [
         'Commands:',
         '  /generate <type> [key:value…]  Generate new content',
-        '  /index status                  Show index stats (note count, freshness)',
-        '  /index refresh                 Incrementally re-index changed vault files',
-        '  /index rebuild                 Build a fresh index over all vault files',
+        '  /index status                  Show keyword + embedding index stats (note count, freshness)',
+        '  /index refresh                 Incrementally re-index changed vault files (both indexes)',
+        '  /index rebuild                 Build fresh keyword + embedding indexes over all vault files',
         '  /verbose on|off                Toggle verbose logging to stdout',
         '  /help                           Show this help',
         '  /exit                           Quit',
@@ -284,6 +284,10 @@ export class CliSession {
       const vaultEmbeddings = this.vaultEmbeddings;
       if (!vaultEmbeddings) {
         this.write('[info] No embedding index — run /index rebuild to enable semantic search.\n');
+      } else if (vaultEmbeddings.stats.modelId !== embeddingProvider.modelId) {
+        this.write(
+          `[warning] Embedding index was built with ${vaultEmbeddings.stats.modelId}, but the configured model is ${embeddingProvider.modelId} — run /index refresh to re-embed all notes.\n`,
+        );
       } else {
         const embStale = await vaultEmbeddings.isStale(this.vaultRoot, embeddingProvider);
         if (embStale)

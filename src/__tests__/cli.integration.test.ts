@@ -258,6 +258,25 @@ describe('/index commands', () => {
     expect(out.captured()).toContain('[warning] Embedding index is stale');
   });
 
+  it('/generate after an embedding model change: names both models and says refresh re-embeds', async () => {
+    const model = makeMockModel();
+    const embIndex = await VaultEmbeddings.build(FIXTURE_VAULT, makeMockEmbeddingProvider('mock-v1'));
+
+    const out = makeOutput();
+    const session = new CliSession({
+      ...baseDeps,
+      model,
+      output: out.stream,
+      embeddingProvider: makeMockEmbeddingProvider('mock-v2'),
+      vaultEmbeddings: embIndex,
+    });
+    await session.processCommand('/generate npc name:Mira role:Spy');
+    expect(out.captured()).toContain(
+      '[warning] Embedding index was built with mock-v1, but the configured model is mock-v2',
+    );
+    expect(out.captured()).not.toContain('[warning] Embedding index is stale');
+  });
+
   it('/index rebuild with embeddingProvider: prints embedding index built message', async () => {
     const provider = makeMockEmbeddingProvider();
     const session = new CliSession({ ...baseDeps, vaultIndex: null, embeddingProvider: provider });

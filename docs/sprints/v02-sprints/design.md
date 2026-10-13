@@ -70,7 +70,7 @@ Mirrors `VaultIndex` exactly:
 |--------|-----------|
 | `static build(vaultRoot, provider, batchSize?)` | Chunk all notes, batch-embed via `provider.embedMany()`, persist |
 | `static load(vaultRoot)` | Load from `.lorecraft/`; `null` if absent |
-| `update(vaultRoot, provider)` | Incremental: mtime-based change detection |
+| `update(vaultRoot, provider)` | Incremental: mtime-based change detection; full re-embed when `provider.modelId` differs |
 | `isStale(vaultRoot, provider?)` | `true` on file changes or `modelId` mismatch |
 | `search(queryVector, limit?)` | Cosine similarity, best chunk per note |
 | `searchByText(query, provider, limit?)` | `provider.embed(query)` then `search()` |
@@ -80,7 +80,8 @@ Persistence: `.lorecraft/embeddings.json` (chunk array) + `.lorecraft/embeddings
 (mtime map, model ID, dimensions).
 
 Model change detection: if `meta.modelId !== provider.modelId`, `isStale()` returns
-`true` (all vectors are in a different space; full rebuild required).
+`true` (all vectors are in a different space); `update()` then re-embeds every note
+under the new model rather than mixing vectors from both.
 
 ---
 
@@ -132,7 +133,7 @@ awareness via the injected deps.
 | Test file | Scope |
 |-----------|-------|
 | `src/vault/note-chunker.test.ts` | Unit — chunking algorithm, edge cases |
-| `src/vault/embedding-provider.test.ts` | Unit — factory, Bedrock calls mocked |
+| `src/llm/embedding-provider.test.ts` | Unit — factory, Bedrock calls mocked |
 | `src/vault/vault-embeddings.test.ts` | Unit — build/load/search/isStale/update; mock provider |
 | `src/agent/tools.test.ts` | Unit — semantic + hybrid tools; mock embeddings + budget |
 | `src/__tests__/agent-vault.integration.test.ts` | Integration — semantic/hybrid session wiring |

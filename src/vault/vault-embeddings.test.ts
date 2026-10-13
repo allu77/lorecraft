@@ -180,6 +180,28 @@ describe('VaultEmbeddings', () => {
     expect(index.stats.noteCount).toBe(before - 1);
   });
 
+  it('update() with a different model re-embeds every note and adopts the new model', async () => {
+    const index = await VaultEmbeddings.build(vaultRoot, provider);
+    const noteCount = index.stats.noteCount;
+    const chunkCount = index.chunkCount;
+    const newProvider: EmbeddingProvider = { ...makeMockProvider('mock-v2'), dimensions: 4 };
+    newProvider.embedMany = vi.fn(async (texts: string[]) => texts.map(() => [1, 0, 0, 0]));
+
+    const counts = await index.update(vaultRoot, newProvider);
+
+    expect(counts).toEqual({ added: 0, updated: noteCount, removed: 0 });
+    expect(index.chunkCount).toBe(chunkCount);
+    expect(index.stats.modelId).toBe('mock-v2');
+    expect(index.stats.dimensions).toBe(4);
+    await expect(index.isStale(vaultRoot, newProvider)).resolves.toBe(false);
+    // No vector from the old model survives: every search score comes from 4-dim vectors.
+    for (const result of index.search([1, 0, 0, 0])) {
+      expect(result.score).toBeCloseTo(1);
+    }
+    const reloaded = await VaultEmbeddings.load(vaultRoot);
+    expect(reloaded?.stats.modelId).toBe('mock-v2');
+  });
+
   it('getChunks() returns chunks ordered by chunkIndex for a note with multiple chunks', async () => {
     const index = await VaultEmbeddings.build(vaultRoot, provider);
     // Find a note that has chunks in the index

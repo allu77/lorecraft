@@ -1,6 +1,6 @@
 # v0.2 Sprint Requirements: Semantic Search via Embeddings
 
-**Status:** In Progress  
+**Status:** Complete  
 **ADR:** ADR-004 (Accepted)
 
 ---

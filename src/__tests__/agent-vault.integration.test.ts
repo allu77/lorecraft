@@ -272,7 +272,10 @@ describe('agent-vault integration', () => {
     const result = await session.generate();
 
     expect(result.content).toBe('Generated content.');
-    // The session should have been created without error — semantic_search tool is wired
+    const toolNames = model.doStreamCalls[0]!.tools?.map((t) => t.name);
+    expect(toolNames).toContain('semantic_search');
+    expect(toolNames).not.toContain('keyword_search');
+    expect(toolNames).not.toContain('hybrid_search');
   });
 
   it('GenerationSession with vaultIndex + vaultEmbeddings: wires hybrid_search only', async () => {
@@ -315,5 +318,9 @@ describe('agent-vault integration', () => {
     const result = await session.generate();
 
     expect(result.content).toBe('Hybrid result.');
+    const toolNames = model.doStreamCalls[0]!.tools?.map((t) => t.name);
+    expect(toolNames).toContain('hybrid_search');
+    expect(toolNames).not.toContain('keyword_search');
+    expect(toolNames).not.toContain('semantic_search');
   });
 });
