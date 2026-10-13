@@ -5,11 +5,15 @@
 - **Status:** Accepted
 - **Context:** Needed a TypeScript-native agentic framework with provider
   abstraction, streaming, and human-in-the-loop support.
-- **Decision:** Use Vercel AI SDK (latest). Bedrock via `@ai-sdk/amazon-bedrock`
+- **Decision:** Use Vercel AI SDK. Bedrock via `@ai-sdk/amazon-bedrock`
   as the default provider. Switching providers requires changing one import
-  and one env var.
+  and one env var. *Amended 2026-10-13 (v03-ai-sdk-7):* `ai`,
+  `@ai-sdk/amazon-bedrock` and `zod` are pinned with `~` ranges (currently
+  `ai` 7.0.x, Bedrock provider 5.0.x) instead of `latest`; major upgrades happen
+  as explicit sprints. Node.js 22+ is required.
 - **Consequences:** Not tied to AWS-specific deployment. Strands Agents SDK
   may be revisited at v0.3 (multi-agent) once its TypeScript SDK stabilises.
+  Patch updates need a periodic bump; the lockfile and the test suite gate them.
 
 ---
 
@@ -50,7 +54,11 @@
   by default). Enabled via `EMBEDDING_PROVIDER=bedrock` env var; absent means
   semantic search is disabled. Model override via `EMBEDDING_MODEL_ID`. The
   abstraction (`EmbeddingProvider` interface in `src/vault/embedding-provider.ts`)
-  makes alternative providers straightforward to add later.
+  makes alternative providers straightforward to add later. *Amended 2026-10-13
+  (v03-ai-sdk-7):* the Bedrock implementation (`BedrockEmbeddingProvider`,
+  `getEmbeddingProvider()`) lives in `src/llm/embedding-provider.ts` and reaches the
+  adapter only through `getEmbeddingModel()` in `src/llm/provider.ts`, so
+  `src/vault/` has no dependency on `src/llm/`.
 - **Consequences:** AWS credentials required (already assumed for LLM). Zero
   new local dependencies. Embedding calls incur Bedrock token costs. Notes are
   chunked before embedding (via `src/vault/note-chunker.ts`) to improve

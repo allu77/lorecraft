@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getEmbeddingProvider, BedrockEmbeddingProvider } from './embedding-provider.js';
+import { getEmbeddingModel } from './provider.js';
 
 // Mock the Vercel AI SDK embed functions to avoid real Bedrock calls
 vi.mock('ai', async (importOriginal) => {
@@ -11,10 +12,8 @@ vi.mock('ai', async (importOriginal) => {
   };
 });
 
-vi.mock('@ai-sdk/amazon-bedrock', () => ({
-  bedrock: {
-    embeddingModel: vi.fn().mockReturnValue({ modelId: 'mock-embedding-model' }),
-  },
+vi.mock('./provider.js', () => ({
+  getEmbeddingModel: vi.fn().mockReturnValue({ modelId: 'mock-embedding-model' }),
 }));
 
 describe('getEmbeddingProvider', () => {
@@ -70,6 +69,12 @@ describe('BedrockEmbeddingProvider', () => {
     const provider = new BedrockEmbeddingProvider();
     const result = await provider.embedMany(['a', 'b']);
     expect(result).toEqual([[0.1, 0.2], [0.3, 0.4]]);
+  });
+
+  it('requests the embedding model for its own modelId', async () => {
+    const provider = new BedrockEmbeddingProvider('cohere.embed-english-v3');
+    await provider.embed('test text');
+    expect(getEmbeddingModel).toHaveBeenCalledWith('cohere.embed-english-v3');
   });
 
   it('embedMany() returns empty array for empty input', async () => {
