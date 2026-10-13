@@ -1,6 +1,6 @@
 # Design — v02-sprint-ollama: Ollama provider (chat + embeddings)
 
-> **Status:** Draft
+> **Status:** Approved
 > **Sprint:** v02-sprint-ollama
 > **Requirements:** [requirements.md](requirements.md)
 > **Tasks:** [tasks.md](tasks.md)
