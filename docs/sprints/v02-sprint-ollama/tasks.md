@@ -66,10 +66,10 @@
   - Spike: capture the real error shapes from `ai` 7 + the adapter for connection refused and missing model (mocked `fetch`), and use them as fixtures
   - Unrecognised errors return `undefined`
 - [x] 012 — Implement `describeProviderError` (`src/llm/errors.ts`)
-- [ ] 013 — [test] Generation-loop tests written first (`src/__tests__/generation-loop.integration.test.ts`)
+- [x] 013 — [test] Generation-loop tests written first (`src/__tests__/generation-loop.integration.test.ts`)
   - Warning logged when budget + 4096 exceeds the window; none when it fits; skipped when a model is injected
   - Token usage normalised to 0 when the model reports no counts
-- [ ] 014 — Log `getModelInfo()` instead of `MODEL_ID` and add the budget-vs-window warning (`src/agent/generation-loop.ts`)
+- [x] 014 — Log `getModelInfo()` instead of `MODEL_ID` and add the budget-vs-window warning (`src/agent/generation-loop.ts`)
 - [ ] 015 — [test] CLI shows the translated message for generate/reply and `/index` failures (`src/__tests__/cli.integration.test.ts`)
 - [ ] 016 — Use `describeProviderError` in the CLI error paths, including `/index rebuild|refresh|status` (`src/cli/index.ts`, `src/cli/inspect.ts` if it calls the provider)
 
