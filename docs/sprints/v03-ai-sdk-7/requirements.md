@@ -1,6 +1,6 @@
 # Requirements — v03-ai-sdk-7: Upgrade Vercel AI SDK to 7.x
 
-> **Status:** Draft
+> **Status:** Approved
 > **Sprint:** v03-ai-sdk-7
 > **Created:** 2026-10-13
 > **Design doc:** [design.md](design.md)
