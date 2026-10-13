@@ -109,4 +109,4 @@
 
 ## Smoke test notes
 
-Task 018 passed (reported by the repo owner on 2026-10-13, run locally against a real Ollama following `docs/development/setup.md`). Model versions, machine and `num_ctx` were not recorded. Before that, `ollama-wire.integration.test.ts` verified the request bodies (`options.num_ctx`, model, `/api/chat`, `/api/embed`) and usage mapping against a stub server.
+Task 018 passed (reported by the repo owner on 2026-10-13, run locally against a real Ollama following `docs/development/setup.md`). Configuration used: `OLLAMA_BASE_URL=http://localhost:11434/api`, `OLLAMA_MODEL=gemma4:e2b`, `OLLAMA_NUM_CTX=16384`, `EMBEDDING_PROVIDER=ollama`, `EMBEDDING_MODEL_ID=nomic-embed-text`, `EMBEDDING_DIMENSIONS=768` (redundant for `nomic-embed-text`, which is in the known-model table; harmless because it matches). Machine not recorded. Before that, `ollama-wire.integration.test.ts` verified the request bodies (`options.num_ctx`, model, `/api/chat`, `/api/embed`) and usage mapping against a stub server.
