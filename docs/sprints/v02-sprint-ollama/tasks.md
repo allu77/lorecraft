@@ -58,7 +58,7 @@
   - Existing Bedrock cases updated for the new `getEmbeddingModel(provider, modelId)` signature
 - [x] 009 — Change `getEmbeddingModel` to `(provider, modelId)` with Ollama support; add `OllamaEmbeddingProvider`, `OLLAMA_EMBEDDING_DIMENSIONS`, and the `ollama` branch of `getEmbeddingProvider()` (`src/llm/provider.ts`, `src/llm/embedding-provider.ts`)
   - Update the Bedrock call sites to pass `'bedrock'`
-- [ ] 010 — [test] A `VaultEmbeddings` built with a Titan model ID reports stale for an Ollama model ID provider (`src/vault/vault-embeddings.test.ts`)
+- [x] 010 — [test] A `VaultEmbeddings` built with a Titan model ID reports stale for an Ollama model ID provider (`src/vault/vault-embeddings.test.ts`)
 
 ### Errors and agent integration
 
