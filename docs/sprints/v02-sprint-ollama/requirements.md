@@ -3,6 +3,7 @@
 > **Status:** Draft
 > **Sprint:** v02-sprint-ollama
 > **Created:** 2026-10-13
+> **Revised:** 2026-10-13 (rebased on `main` after v03-ai-sdk-7: `ai` 7.x, embedding provider moved to `src/llm/`)
 > **Design doc:** [design.md](design.md)
 > **Tasks:** [tasks.md](tasks.md)
 
@@ -37,8 +38,10 @@ generates content with a model running on my own machine.
    unknown-provider error. *(See out of scope.)*
 5. The agent's "model resolved" log line reports the actual provider and model
    in use (today it only logs `MODEL_ID`, which is wrong for Ollama).
-6. `src/agent/` and `src/cli/` contain no Ollama-specific imports; the adapter
-   is imported only inside `src/llm/provider.ts`.
+6. `src/agent/`, `src/cli/` and `src/vault/` contain no Ollama-specific imports;
+   the Ollama adapter is imported only inside `src/llm/provider.ts`. The existing
+   `src/__tests__/provider-boundary.test.ts` is extended to enforce this for the
+   Ollama adapter, as it already does for Bedrock.
 
 ---
 
@@ -64,9 +67,13 @@ truncated prompt.
 **As a** GM, **I want** to set `EMBEDDING_PROVIDER=ollama` **so that** semantic
 search works offline with a local embedding model.
 
-1. `getEmbeddingProvider()` returns an Ollama-backed `EmbeddingProvider` when
-   `EMBEDDING_PROVIDER=ollama`, using `EMBEDDING_MODEL_ID` (default
-   `nomic-embed-text`) against `OLLAMA_BASE_URL`.
+1. `getEmbeddingProvider()` (in `src/llm/embedding-provider.ts`) returns an
+   Ollama-backed provider when `EMBEDDING_PROVIDER=ollama`, using
+   `EMBEDDING_MODEL_ID` (default `nomic-embed-text`) against `OLLAMA_BASE_URL`.
+   The Ollama embedding model is obtained through `getEmbeddingModel()` in
+   `src/llm/provider.ts`, which gains Ollama support alongside Bedrock.
+   Its return type satisfies the `EmbeddingProvider` interface in
+   `src/vault/embedding-provider.ts` structurally (no import from `src/vault/`).
 2. `embed` and `embedMany` return vectors whose length equals the provider's
    `dimensions`.
 3. `dimensions` and `modelId` are correct for the configured model, so changing
@@ -94,11 +101,12 @@ that** I can fix the problem without reading stack traces.
 **As a** GM, **I want** token usage reported for local models too **so that**
 the existing "report after every generation" invariant still holds.
 
-1. After a generation with Ollama, the CLI prints input/output/total tokens as
-   it does for Bedrock.
-2. Estimated cost for Ollama is reported as $0.00 (not a Bedrock price).
-3. If the adapter returns no usage numbers, tokens are reported as 0 without
+1. After a generation or follow-up with Ollama, the CLI prints input/output/total
+   tokens as it does for Bedrock, taken from the `ai` 7 `totalUsage`.
+2. If the adapter returns no usage numbers, tokens are reported as 0 without
    crashing (`normalizeUsage` behaviour verified by a test).
+3. No cost line is added: the CLI does not estimate cost for any provider today
+   (see out of scope), so there is nothing provider-specific to fix.
 
 ---
 
@@ -119,8 +127,9 @@ accurate.
 
 - **Anthropic direct provider** (`LLM_PROVIDER=anthropic`). Documented but
   separate; same pattern, own sprint.
-- **Upgrading `ai` to v7** and the matching `@ai-sdk/amazon-bedrock` major
-  (see open questions).
+- **Cost estimation.** The "estimated cost" half of the token-reporting invariant
+  is not implemented for any provider (the CLI prints tokens only). Adding it is
+  a separate piece of work; Ollama's cost would simply be $0.
 - **Automatic discovery of the model's real context window** via Ollama's
   `/api/show`. The GM sets `OLLAMA_NUM_CTX`; auto-detect is a possible follow-up.
 - **Auto-pulling models** or managing the Ollama server.
@@ -141,8 +150,12 @@ accurate.
 - Module boundaries (`.claude/rules/architecture.md`): `src/llm/` imports no
   other `src/` module; `src/vault/` imports none of `src/agent/`, `src/llm/`,
   `src/cli/`.
-- The Ollama adapter must be compatible with the installed `ai` major (currently
-  6.x): `ollama-ai-provider-v2@^3.6.0` supports `ai` 5 and 6; 4.x requires `ai` 7.
+- The repo is on `ai` 7.x (`~7.0.137`) with dependencies pinned by tilde range and
+  no `latest` (v03-ai-sdk-7). The adapter is `ollama-ai-provider-v2` 4.x (peer
+  `ai ^7`), added with a `~` range; 3.x is for `ai` 5/6 and must not be used.
+- Provider-adapter imports live only in `src/llm/provider.ts` (enforced by
+  `src/__tests__/provider-boundary.test.ts`); `src/llm/embedding-provider.ts`
+  reaches adapters only through `getEmbeddingModel()`.
 - TypeScript strict mode; follow `docs/development/typescript-rules.md` and the
   style guide; logging only through `getLogger`.
 - Tests follow ADR-005/006: no live Ollama server in CI; the adapter is mocked.
@@ -156,14 +169,15 @@ accurate.
 
 | # | Question | Assumption | Risk if wrong |
 |---|---|---|---|
-| 1 | Which `ai` major? The latest `ollama-ai-provider-v2` (4.x) needs `ai` 7; the repo is on `ai` 6.0.168 with `@ai-sdk/amazon-bedrock` 4.x. | Stay on `ai` 6 and use `ollama-ai-provider-v2@^3.6.0`. Upgrade to `ai` 7 as its own sprint (it also needs a Bedrock major bump). | Skipping the upgrade leaves us a major behind; upgrading now widens the sprint to touch all Bedrock/agent code. |
+| 1 | ~~Which `ai` major?~~ **Resolved:** `main` is on `ai` 7.0.x / Bedrock 5.0.x. | Use `ollama-ai-provider-v2@~4.0.1` (peer `ai ^7`); to be verified against the installed `ai` version in the design phase. | Adapter 4.x may lag a minor `ai` 7 API; check at install. |
 | 2 | How should the context window be configured and what is the default `num_ctx`? | `OLLAMA_NUM_CTX` env var; default **16384** when unset. | Too low truncates; too high can exhaust RAM/VRAM on small machines. |
 | 3 | Should `num_ctx` drive the budget (derive `CONTEXT_BUDGET_TOKENS` from it) or just validate it? | Validate only: warn if budget + headroom exceeds `num_ctx`; the two stay independent settings. | A silent mismatch recreates the truncation problem; deriving removes an explicit knob some users want. |
 | 4 | How do we learn the embedding dimension? `EmbeddingProvider.dimensions` is a synchronous property; Titan's is hardcoded. | Known-model table (`nomic-embed-text` = 768, `mxbai-embed-large` = 1024, `all-minilm` = 384) plus optional `EMBEDDING_DIMENSIONS` override; unknown model without override fails fast. | Wrong dimension corrupts index metadata; probing at runtime would need an async API change. |
-| 5 | Where may the Ollama embedding adapter be imported? The invariant says provider code lives in `src/llm/provider.ts`, but `src/vault/` cannot import `src/llm/` and Bedrock embeddings are already in `src/vault/embedding-provider.ts`. | Follow the existing ADR-004 pattern (adapter imported in `src/vault/embedding-provider.ts`). Reconciling the invariant is noted in the ADR update, not refactored here. | Leaves one known deviation from the stated invariant. |
-| 6 | Cost reporting: where is the estimator and does it assume Bedrock pricing? | It is a small function in the CLI/agent path; Ollama returns $0 via a provider-aware lookup. | Could be larger than expected if pricing is hard-wired in several places. |
+| 5 | ~~Where may the Ollama embedding adapter be imported?~~ **Resolved:** v03-ai-sdk-7 moved embeddings to `src/llm/embedding-provider.ts` and the adapter to `src/llm/provider.ts`. | Ollama follows the same layout; no deviation from the invariant remains. | None. |
+| 6 | ~~Cost reporting~~ **Resolved:** no cost estimator exists for any provider. | Out of scope; no change. | None. |
 | 7 | Recommended chat models? | Document `llama3.1`/`qwen3` class models that support tool calling, with a manual smoke test. | Chosen model may not call tools reliably. |
-| 8 | Sprint ID and layout. | `v02-sprint-ollama` under `docs/sprints/`, matching `v02-sprint-addon`. | Cosmetic. |
+| 8 | Sprint ID and layout. The sibling sprint is now `v03-ai-sdk-7`. | Keep `v02-sprint-ollama`; rename to `v03-ollama` if you prefer to follow the new prefix. | Cosmetic. |
+| 9 | ADR handling. ADR-004 already carries a v03-ai-sdk-7 amendment note. | Amend ADR-004 again (Ollama embeddings now supported, rationale no longer "no Ollama dependency"), and mention the chat provider switch in ADR-001. | Cosmetic. |
 
 ---
 
@@ -175,7 +189,12 @@ accurate.
   local embeddings (`nomic-embed-text`) named the recommended default for the
   local-first principle
 - `.claude/rules/architecture.md`: module boundary rules
-- Existing code: `src/llm/provider.ts`, `src/vault/embedding-provider.ts`,
-  `src/agent/generation-loop.ts` (`getModel()`, budget, `normalizeUsage`)
+- v03-ai-sdk-7 sprint: `docs/sprints/v03-ai-sdk-7/` (`ai` 7, dependency pinning,
+  embedding provider move)
+- Existing code: `src/llm/provider.ts` (`getModel()`, `getEmbeddingModel()`),
+  `src/llm/embedding-provider.ts` (`getEmbeddingProvider()`),
+  `src/vault/embedding-provider.ts` (`EmbeddingProvider` interface),
+  `src/__tests__/provider-boundary.test.ts`,
+  `src/agent/generation-loop.ts` (budget, `normalizeUsage`)
 - Adapter: `ollama-ai-provider-v2` (`options.num_ctx` is supported as a provider
   option)
