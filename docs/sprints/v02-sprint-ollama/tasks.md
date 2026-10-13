@@ -62,10 +62,10 @@
 
 ### Errors and agent integration
 
-- [ ] 011 — [test] `describeProviderError` tests written first (`src/llm/errors.test.ts`)
+- [x] 011 — [test] `describeProviderError` tests written first (`src/llm/errors.test.ts`)
   - Spike: capture the real error shapes from `ai` 7 + the adapter for connection refused and missing model (mocked `fetch`), and use them as fixtures
   - Unrecognised errors return `undefined`
-- [ ] 012 — Implement `describeProviderError` (`src/llm/errors.ts`)
+- [x] 012 — Implement `describeProviderError` (`src/llm/errors.ts`)
 - [ ] 013 — [test] Generation-loop tests written first (`src/__tests__/generation-loop.integration.test.ts`)
   - Warning logged when budget + 4096 exceeds the window; none when it fits; skipped when a model is injected
   - Token usage normalised to 0 when the model reports no counts

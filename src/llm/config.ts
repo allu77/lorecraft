@@ -15,6 +15,8 @@ export type OllamaConfig = {
 };
 
 export const DEFAULT_OLLAMA_NUM_CTX = 16_384;
+/** The adapter's own default, used when `OLLAMA_BASE_URL` is unset. */
+export const DEFAULT_OLLAMA_BASE_URL = 'http://127.0.0.1:11434/api';
 const DEFAULT_OLLAMA_MODEL = 'llama3.1';
 const SUPPORTED_LLM_PROVIDERS: readonly LlmProviderName[] = ['bedrock', 'ollama'];
 
