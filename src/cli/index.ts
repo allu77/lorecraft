@@ -9,6 +9,7 @@ import type { StreamCallbacks } from '../agent/generation-loop.js';
 import { VaultIndex } from '../vault/vault-index.js';
 import { VaultEmbeddings } from '../vault/vault-embeddings.js';
 import { getEmbeddingProvider } from '../llm/embedding-provider.js';
+import { describeProviderError } from '../llm/errors.js';
 import type { EmbeddingProvider } from '../vault/embedding-provider.js';
 import { initLogger, setVerbose, isVerbose, getLogger } from '../utils/logger.js';
 
@@ -123,6 +124,16 @@ export class CliSession {
         onToolCall: (name, input) => this.writeToolCall(name, input),
       }),
     };
+  }
+
+  /**
+   * Prints a failure as `Error: <message>`, preferring a provider-specific explanation
+   * (Ollama unreachable, model not pulled) over the raw error text.
+   */
+  private reportError(error: unknown, logMessage: string, fields: Record<string, unknown> = {}): void {
+    const raw = error instanceof Error ? error.message : String(error);
+    getLogger('cli').error({ err: raw, ...fields }, logMessage);
+    this.write(`Error: ${describeProviderError(error) ?? raw}\n`);
   }
 
   private async handleContinuation(line: string): Promise<GenerationSession | null> {
@@ -318,12 +329,7 @@ export class CliSession {
     try {
       return await this.executeGenerate(type, inputs);
     } catch (error) {
-      if (error instanceof Error) {
-        logger.error({ err: error.message, type }, 'generation failed');
-        this.write(`Error: ${error.message}\n`);
-      } else {
-        this.write(`Error: ${String(error)}\n`);
-      }
+      this.reportError(error, 'generation failed', { type });
       return null;
     }
   }
@@ -339,7 +345,11 @@ export class CliSession {
     const trimmed = line.trim();
     logger.debug({ line: trimmed }, 'command received');
     if (!trimmed.startsWith('/')) {
-      this.state = await this.handleContinuation(trimmed);
+      try {
+        this.state = await this.handleContinuation(trimmed);
+      } catch (error) {
+        this.reportError(error, 'continuation failed');
+      }
       return this.state;
     }
     const spaceIndex = trimmed.indexOf(' ');
@@ -358,7 +368,11 @@ export class CliSession {
       return this.state;
     }
     if (command === '/index') {
-      await this.handleIndex(commandArgs);
+      try {
+        await this.handleIndex(commandArgs);
+      } catch (error) {
+        this.reportError(error, 'index command failed', { command: commandArgs });
+      }
       return this.state;
     }
     if (command === '/generate') {

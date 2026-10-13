@@ -285,6 +285,10 @@ export class GenerationSession {
         case 'tool-call':
           callbacks?.onToolCall?.(part.toolName, part.input);
           break;
+        case 'error':
+          // The stream swallows model errors and later fails with "No output generated";
+          // rethrow so callers see the real cause (e.g. Ollama unreachable).
+          throw part.error;
       }
     }
 
@@ -350,6 +354,10 @@ export class GenerationSession {
         case 'tool-call':
           callbacks?.onToolCall?.(part.toolName, part.input);
           break;
+        case 'error':
+          // The stream swallows model errors and later fails with "No output generated";
+          // rethrow so callers see the real cause (e.g. Ollama unreachable).
+          throw part.error;
       }
     }
 

@@ -70,8 +70,8 @@
   - Warning logged when budget + 4096 exceeds the window; none when it fits; skipped when a model is injected
   - Token usage normalised to 0 when the model reports no counts
 - [x] 014 — Log `getModelInfo()` instead of `MODEL_ID` and add the budget-vs-window warning (`src/agent/generation-loop.ts`)
-- [ ] 015 — [test] CLI shows the translated message for generate/reply and `/index` failures (`src/__tests__/cli.integration.test.ts`)
-- [ ] 016 — Use `describeProviderError` in the CLI error paths, including `/index rebuild|refresh|status` (`src/cli/index.ts`, `src/cli/inspect.ts` if it calls the provider)
+- [x] 015 — [test] CLI shows the translated message for generate/reply and `/index` failures (`src/__tests__/cli.integration.test.ts`)
+- [x] 016 — Use `describeProviderError` in the CLI error paths, including `/index rebuild|refresh|status` (`src/cli/index.ts`, `src/cli/inspect.ts` if it calls the provider)
 
 ### Integration
 
@@ -100,6 +100,9 @@
 <!-- Log bugs, scope changes, and new tasks here rather than adding ad-hoc checkboxes above.
 - [ ] NNN — Description (discovered: YYYY-MM-DD)
 -->
+
+- [x] D1 — `GenerationSession.generate()`/`continue()` ignored `error` stream parts, so any model failure (Bedrock too) surfaced as "No output generated. Check the stream for errors."; now rethrown so the real cause reaches the CLI (`src/agent/generation-loop.ts`, covered by `cli.integration.test.ts`) (discovered: 2026-10-13)
+- [x] D2 — `processCommand` let continuation and `/index` errors escape as unhandled rejections inside the readline handler; now caught and printed through `reportError` (`src/cli/index.ts`) (discovered: 2026-10-13)
 
 ---
 
