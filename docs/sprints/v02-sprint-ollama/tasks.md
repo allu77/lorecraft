@@ -32,11 +32,11 @@
 
 ### Configuration (`src/llm/config.ts`)
 
-- [ ] 003 — [test] Config unit tests written first (`src/llm/config.test.ts`)
+- [x] 003 — [test] Config unit tests written first (`src/llm/config.test.ts`)
   - `LLM_PROVIDER`: unset → `bedrock`; `bedrock`; `ollama`; `anthropic` → "not implemented" error; junk → unknown-provider error listing `bedrock`, `ollama`
   - `OLLAMA_NUM_CTX`: default 16384; valid; `abc`, `0`, `-5`, `1.5` → clear error
   - `OLLAMA_BASE_URL` passed through unchanged; unset → `undefined`; `OLLAMA_MODEL` default `llama3.1`
-- [ ] 004 — Implement `getLlmProviderName()`, `getOllamaConfig()`, `DEFAULT_OLLAMA_NUM_CTX`, types (`src/llm/config.ts`)
+- [x] 004 — Implement `getLlmProviderName()`, `getOllamaConfig()`, `DEFAULT_OLLAMA_NUM_CTX`, types (`src/llm/config.ts`)
 
 ### Chat provider (`src/llm/provider.ts`)
 
