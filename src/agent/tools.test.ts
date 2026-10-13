@@ -49,7 +49,7 @@ async function callExecute(
   const exec = tool.execute!;
   return exec(
     { wikilink },
-    { messages: [], toolCallId: 'test' },
+    { messages: [], toolCallId: 'test', context: {} },
   ) as Promise<WikilinkToolResult>;
 }
 
@@ -77,6 +77,7 @@ async function callKeywordExecute(
   return exec(args, {
     messages: [],
     toolCallId: 'test',
+    context: {},
   }) as Promise<KeywordSearchToolResult>;
 }
 
@@ -260,7 +261,7 @@ async function callSemanticExecute(
   args: { query: string; limit?: number },
 ): Promise<SemanticSearchToolResult> {
   const exec = tool.execute!;
-  return exec(args, { messages: [], toolCallId: 'test' }) as Promise<SemanticSearchToolResult>;
+  return exec(args, { messages: [], toolCallId: 'test', context: {} }) as Promise<SemanticSearchToolResult>;
 }
 
 async function callHybridExecute(
@@ -268,7 +269,7 @@ async function callHybridExecute(
   args: { query: string; limit?: number },
 ): Promise<HybridSearchToolResult> {
   const exec = tool.execute!;
-  return exec(args, { messages: [], toolCallId: 'test' }) as Promise<HybridSearchToolResult>;
+  return exec(args, { messages: [], toolCallId: 'test', context: {} }) as Promise<HybridSearchToolResult>;
 }
 
 const embResult1: EmbeddingSearchResult = {

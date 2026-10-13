@@ -4,7 +4,9 @@ exports[`GenerationSession integration > assembled prompt matches snapshot 1`] =
 {
   "abortSignal": undefined,
   "frequencyPenalty": undefined,
-  "headers": undefined,
+  "headers": {
+    "user-agent": "ai-sdk-agent/tool-loop",
+  },
   "includeRawChunks": false,
   "maxOutputTokens": undefined,
   "presencePenalty": undefined,
@@ -150,6 +152,7 @@ quietly.
     },
   ],
   "providerOptions": undefined,
+  "reasoning": undefined,
   "responseFormat": undefined,
   "seed": undefined,
   "stopSequences": undefined,
@@ -175,7 +178,6 @@ quietly.
         "type": "object",
       },
       "name": "wikilink_resolve",
-      "providerOptions": undefined,
       "type": "function",
     },
   ],
