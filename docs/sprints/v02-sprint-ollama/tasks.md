@@ -1,6 +1,6 @@
 # Tasks — v02-sprint-ollama: Ollama provider (chat + embeddings)
 
-> **Status:** Not started
+> **Status:** In progress (018 smoke test and 022 wrap-up pending)
 > **Sprint:** v02-sprint-ollama
 > **Requirements:** [requirements.md](requirements.md)
 > **Design:** [design.md](design.md)
